@@ -23,7 +23,7 @@ class FanFile(EpcFile):
         super(FanFile, self).__init__(*args, **kwargs)
     
     def read_nc(self, fname=None):
-        """Open the EIG2D.nc file and read it."""
+        """Open the FAN.nc file and read it."""
         fname = fname if fname else self.fname
 
         super(FanFile, self).read_nc(fname)

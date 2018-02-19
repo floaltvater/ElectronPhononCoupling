@@ -23,7 +23,7 @@ class GkkFile(EpcFile):
         super(GkkFile, self).__init__(*args, **kwargs)
     
     def read_nc(self, fname=None):
-        """Open the EIG2D.nc file and read it."""
+        """Open the GKK.nc file and read it."""
         fname = fname if fname else self.fname
 
         super(GkkFile, self).read_nc(fname)
