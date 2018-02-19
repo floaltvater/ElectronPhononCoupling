@@ -31,6 +31,7 @@ class QptAnalyzer(object):
                  temperatures=None,
                  omegase=None,
                  amu=None,
+                 max_nband=None,
                  asr=True,
                  mu=None,
                  double_smearing = False,
@@ -38,18 +39,18 @@ class QptAnalyzer(object):
                  smearing_above = 0.00367,
                  smearing_below = 0.00367,
                  ):
-
+        
         # Files
         self.ddb = DdbFile(ddb_fname, read=False, asr=asr)
-        self.eigq = EigFile(eigq_fname, read=False)
-        self.eigr2d = Eigr2dFile(eigr2d_fname, read=False)
-        self.eigi2d = Eigr2dFile(eigi2d_fname, read=False)
-        self.fan = FanFile(fan_fname, read=False)
-        self.eig0 = EigFile(eigk_fname, read=False)
-        self.eigr2d0 = Eigr2dFile(eigr2d0_fname, read=False)
-        self.fan0 = FanFile(fan0_fname, read=False)
-        self.gkk = GkkFile(gkk_fname, read=False)
-        self.gkk0 = GkkFile(gkk0_fname, read=False)
+        self.eigq = EigFile(eigq_fname, read=False, max_nband=max_nband)
+        self.eigr2d = Eigr2dFile(eigr2d_fname, read=False, max_nband=max_nband)
+        self.eigi2d = Eigr2dFile(eigi2d_fname, read=False, max_nband=max_nband)
+        self.fan = FanFile(fan_fname, read=False, max_nband=max_nband)
+        self.eig0 = EigFile(eigk_fname, read=False, max_nband=max_nband)
+        self.eigr2d0 = Eigr2dFile(eigr2d0_fname, read=False, max_nband=max_nband)
+        self.fan0 = FanFile(fan0_fname, read=False, max_nband=max_nband)
+        self.gkk = GkkFile(gkk_fname, read=False, max_nband=max_nband)
+        self.gkk0 = GkkFile(gkk0_fname, read=False, max_nband=max_nband)
 
         self.wtq = wtq
         self.smearing = smearing

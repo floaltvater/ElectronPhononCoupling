@@ -19,6 +19,7 @@ __all__ = ['EigFile']
 class EigFile(EpcFile):
 
     def __init__(self, *args, **kwargs):
+        self.max_nband = kwargs.pop('max_nband', None)
         super(EigFile, self).__init__(*args, **kwargs)
         self.EIG = None
         self.degen = None
@@ -30,8 +31,7 @@ class EigFile(EpcFile):
         super(EigFile, self).read_nc(fname)
 
         with nc.Dataset(fname, 'r') as root:
-
-            self.EIG = root.variables['Eigenvalues'][:,:,:] 
+            self.EIG = root.variables['Eigenvalues'][:,:,:self.max_nband] 
             self.Kptns = root.variables['Kptns'][:,:]
 
     @mpi_watch
@@ -195,7 +195,8 @@ class EigFile(EpcFile):
                 for degi in group:
                     for degj in group:
                         ieig, jeig = degi[1], degj[1]
-                        offdiag[ikpt][ieig][jeig] = 0
+                        if ieig < nband and jeig < nband:
+                            offdiag[ikpt][ieig][jeig] = 0
     
         fan_epc_sym = np.einsum('ijkl,ijk->ijkl', fan_epc, offdiag)
     

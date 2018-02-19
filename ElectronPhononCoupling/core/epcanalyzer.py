@@ -77,6 +77,7 @@ class EpcAnalyzer(object):
                  smearing=0.00367,
                  fermi_level = None,
                  amu = None,
+                 max_nband = None,
 
                  double_smearing = False,
                  smearing_width = 0.0367,
@@ -170,6 +171,7 @@ class EpcAnalyzer(object):
             gkk0_fname=gkk0,
             asr=asr,
             amu=amu,
+            max_nband=max_nband,
             double_smearing = double_smearing,
             smearing_width = smearing_width,
             smearing_above = smearing_above,
@@ -381,6 +383,8 @@ class EpcAnalyzer(object):
     @mpi_watch
     def distribute_workload(self, fine=False):
         """Distribute the q-points indicies to be treated by each worker."""
+        
+
         if fine:
             self.my_iqpts = self.get_iqpts(self.nqpt_fine)
         else:

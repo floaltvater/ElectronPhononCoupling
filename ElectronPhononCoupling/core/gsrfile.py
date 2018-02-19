@@ -17,6 +17,7 @@ __all__ = ['GsrFile']
 class GsrFile(EigFile):
 
     def __init__(self, *args, **kwargs):
+        self.max_nband = kwargs.pop('max_nband', None)
         super(GsrFile, self).__init__(*args, **kwargs)
         self.degen = None
 
@@ -28,7 +29,7 @@ class GsrFile(EigFile):
 
         with nc.Dataset(fname, 'r') as root:
 
-            self.EIG = root.variables['eigenvalues'][:,:,:] 
+            self.EIG = root.variables['eigenvalues'][:,:,:self.max_nband] 
             self.Kptns = root.variables['reduced_coordinates_of_kpoints'][:,:]
             self.occ = root.variables['occupations'][:,:,:]
             self.nspin, self.nkpt, self.nband = self.EIG.shape

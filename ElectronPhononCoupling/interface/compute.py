@@ -31,6 +31,7 @@ def compute(
         omega_range = [-0.1, 0.1, 0.001],
         fermi_level = None,
         amu = None,
+        max_nband = None,
 
         # File names
         rootname = 'epc.out',
@@ -152,6 +153,10 @@ def compute(
         The atomic masses, in amu.
         Will be read from the files if not specified.
 
+    max_nband:
+        Maximum number of bands to read from input files.
+        All bands are read if not specified.
+
 
     File names
     ----------
@@ -222,6 +227,7 @@ def compute(
         smearing=smearing_Ha,
         fermi_level=fermi_level,
         amu=amu,
+        max_nband=max_nband,
 
         write=write,
         rootname=rootname,
