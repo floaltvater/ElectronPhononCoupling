@@ -394,19 +394,24 @@ class QptAnalyzer(object):
             raise Exception('You should provide GKK files or FAN files '
                             'to compute active space contribution.')
 
-        # Get reduced displacement (scaled with frequency)
-        displ_red_FAN2, displ_red_DDW2 = self.ddb.get_reduced_displ_squared()
-
         if self.use_gkk:
-            gkk2 = self.gkk.get_gkk_squared()
-            gkk02 = self.gkk0.get_gkk_squared()
+
+            #gkk2 = self.gkk.get_gkk_squared()
+            #gkk02 = self.gkk0.get_gkk_squared()
+
+            fan = np.abs(self.gkk.get_gkk_mode(self.ddb)) ** 2
+            ddw = self.gkk0.get_gkk2_DW_mode(self.ddb)
+
         else:
+            # Get reduced displacement (scaled with frequency)
+            displ_red_FAN2, displ_red_DDW2 = self.ddb.get_reduced_displ_squared()
+
             gkk2 = self.fan.FAN
             gkk02 = self.fan0.FAN
 
-        # nkpt, nband, nband, nmode
-        fan = einsum('kniajbm,oabij->knmo', gkk2, displ_red_FAN2)
-        ddw = einsum('kniajbm,oabij->knmo', gkk02, displ_red_DDW2)
+            # nkpt, nband, nband, nmode
+            fan = einsum('kniajbm,oabij->knmo', gkk2, displ_red_FAN2)
+            ddw = einsum('kniajbm,oabij->knmo', gkk02, displ_red_DDW2)
 
         # Enforce the diagonal coupling terms to be zero at Gamma
         ddw = self.eig0.symmetrize_fan_degen(ddw)
@@ -986,6 +991,19 @@ class QptAnalyzer(object):
             )
         return self.zpr
 
+    def get_zpr_static_sternheimer_modes(self):
+        """Compute the q-point zpr contribution in a static scheme."""
+
+        self.zpr = self.get_self_energy(
+            mode=True,
+            temperature=False,
+            omega=False,
+            dynamical=False,
+            only_sternheimer=True,
+            only_active=False,
+            ).real
+        return self.zpr
+
     def get_zpr_static(self):
         """
         Compute the q-point zpr contribution in a static scheme,
@@ -1118,6 +1136,23 @@ class QptAnalyzer(object):
             only_active=True,
             real=True,
             )
+        # nkpt, nband, ntemp
+        return self.zpr
+
+    def get_zpr_dynamical_active_modes(self):
+        """
+        Compute the q-point contribution to the zero point
+        renormalization in a dynamical scheme,
+        taking only the active space contribution.
+        """
+        self.zpr = self.get_self_energy(
+            mode=True,
+            temperature=False,
+            omega=False,
+            dynamical=True,
+            only_sternheimer=False,
+            only_active=True,
+            ).real
         # nkpt, nband, ntemp
         return self.zpr
 
@@ -1302,3 +1337,22 @@ class QptAnalyzer(object):
             shape='knt',
             )
         return self.tdr
+
+    def get_zp_fan_active(self):
+        """
+        Compute only the active part of fan term
+        """
+        self.zpaf = self.get_self_energy(
+            mode=False,
+            temperature=False,
+            omega=True,
+            dynamical=True,
+            only_sternheimer=False,
+            only_active=True,
+            only_fan=True,
+            )
+        # nkpt, nband, nomegase, nband
+        self.zpaf = einsum('lkn->knl', self.zpaf) # FIXME why??
+
+        return self.zpaf
+
