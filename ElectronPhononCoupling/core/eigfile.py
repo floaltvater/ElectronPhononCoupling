@@ -31,7 +31,9 @@ class EigFile(EpcFile):
         super(EigFile, self).read_nc(fname)
 
         with nc.Dataset(fname, 'r') as root:
+            # nspin, nkpt, nband
             self.EIG = root.variables['Eigenvalues'][:,:,:self.max_nband] 
+            # nkpt, 3
             self.Kptns = root.variables['Kptns'][:,:]
 
     @mpi_watch
