@@ -22,6 +22,10 @@ __all__ = ['GkkFile']
 
 class GkkFile(EpcFile):
     
+    def __init__(self, *args, **kwargs):
+        self.max_nband = kwargs.pop('max_nband', None)
+        super(GkkFile, self).__init__(*args, **kwargs)
+    
     def read_nc(self, fname=None):
         """Open the GKK.nc file and read it."""
         fname = fname if fname else self.fname
@@ -32,14 +36,17 @@ class GkkFile(EpcFile):
 
             self.natom = len(root.dimensions['number_of_atoms'])
             self.nkpt = len(root.dimensions['number_of_kpoints'])
-            self.nband = len(root.dimensions['max_number_of_states'])
+            if self.max_nband is not None:
+                self.nband = min(self.max_nband, len(root.dimensions['max_number_of_states']))
+            else:
+                self.nband = len(root.dimensions['max_number_of_states'])
             self.nsppol = len(root.dimensions['number_of_spins'])
 
             # number_of_spins, number_of_kpoints, max_number_of_states
-            self.occ = root.variables['occupations'][:,:,:]
+            self.occ = root.variables['occupations'][:,:,:self.nband]
 
             # number_of_spins, number_of_kpoints, max_number_of_states   
-            self.eigenvalues = root.variables['eigenvalues'][:,:,:]
+            self.eigenvalues = root.variables['eigenvalues'][:,:,:self.nband]
 
             # number_of_kpoints, 3
             self.kpt = root.variables['reduced_coordinates_of_kpoints'][:,:]
@@ -48,7 +55,7 @@ class GkkFile(EpcFile):
             self.rprimd = root.variables['primitive_vectors'][:,:]
 
             # nband, natom, ncart, nkpt, product_mband_nsppol*2 
-            GKKtmp = root.variables['second_derivative_eigenenergies_actif'][:,:,:,:,:]
+            GKKtmp = root.variables['second_derivative_eigenenergies_actif'][:self.nband,:,:,:,:self.nband*self.nsppol*2]
             GKKtmp2 = np.einsum('ijkno->nokji', GKKtmp)
             self.GKK = np.zeros((self.nkpt, self.nsppol*self.nband, 3, self.natom, self.nband), dtype=np.complex)
             self.GKK.real[...] = GKKtmp2[:, ::2, ...]

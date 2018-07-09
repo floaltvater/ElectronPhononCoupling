@@ -18,6 +18,10 @@ __all__ = ['Eigr2dFile']
 
 class Eigr2dFile(EpcFile):
 
+    def __init__(self, *args, **kwargs):
+        self.max_nband = kwargs.pop('max_nband', None)
+        super(Eigr2dFile, self).__init__(*args, **kwargs)
+
     def read_nc(self, fname=None):
         """Open the EIG2D.nc file and read it."""
         fname = fname if fname else self.fname
@@ -28,17 +32,20 @@ class Eigr2dFile(EpcFile):
 
             self.natom = len(root.dimensions['number_of_atoms'])
             self.nkpt = len(root.dimensions['number_of_kpoints'])
-            self.nband = len(root.dimensions['max_number_of_states'])
+            if self.max_nband is not None:
+                self.nband = min(self.max_nband, len(root.dimensions['max_number_of_states']))
+            else:
+                self.nband = len(root.dimensions['max_number_of_states'])
             self.nsppol = len(root.dimensions['number_of_spins'])
 
             # number_of_spins, number_of_kpoints, max_number_of_states
-            self.occ = root.variables['occupations'][:,:,:]
+            self.occ = root.variables['occupations'][:,:,:self.nband]
 
             self.EIG2D = zeros((self.nkpt, self.nband, 3, self.natom, 3, self.natom), dtype=np.complex)
 
             # number_of_atoms, number_of_cartesian_directions, number_of_atoms, number_of_cartesian_directions,
             # number_of_kpoints, product_mband_nsppol, cplex
-            EIG2Dtmp = root.variables['second_derivative_eigenenergies'][:,:,:,:,:,:,:]
+            EIG2Dtmp = root.variables['second_derivative_eigenenergies'][:,:,:,:,:,:self.nband*self.nsppol,:]
 
             EIG2Dtmp2 = np.einsum('ijklmno->mnlkjio', EIG2Dtmp)
 
@@ -48,7 +55,7 @@ class Eigr2dFile(EpcFile):
             del EIG2Dtmp, EIG2Dtmp2
 
             # number_of_spins, number_of_kpoints, max_number_of_states   
-            self.eigenvalues = root.variables['eigenvalues'][:,:,:]
+            self.eigenvalues = root.variables['eigenvalues'][:,:,:self.nband]
 
             # number_of_kpoints, 3
             self.kpt = root.variables['reduced_coordinates_of_kpoints'][:,:]
