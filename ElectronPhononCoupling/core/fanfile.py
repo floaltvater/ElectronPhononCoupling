@@ -13,6 +13,8 @@ from .mpi import MPI, comm, size, rank, mpi_watch
 
 from . import EpcFile
 
+from ..util.ncutil import get_kpt_map
+
 __all__ = ['FanFile']
 
 
@@ -20,6 +22,7 @@ class FanFile(EpcFile):
     
     def __init__(self, *args, **kwargs):
         self.max_nband = kwargs.pop('max_nband', None)
+        self.kpts_inp = kwargs.pop('kpts_inp', None)
         super(FanFile, self).__init__(*args, **kwargs)
     
     def read_nc(self, fname=None):
@@ -31,7 +34,10 @@ class FanFile(EpcFile):
         with nc.Dataset(fname, 'r') as root:
 
             self.natom = len(root.dimensions['number_of_atoms'])
-            self.nkpt = len(root.dimensions['number_of_kpoints'])
+            keyword = 'reduced_coordinates_of_kpoints'
+            kpt_idx = get_kpt_map(root, keyword, self.kpts_inp)
+            self.kpt = root.variables[keyword][kpt_idx,:]
+            self.nkpt = self.kpt.shape[0]
             if self.max_nband is not None:
                 self.nband = min(self.max_nband, len(root.dimensions['max_number_of_states']))
             else:
@@ -39,7 +45,7 @@ class FanFile(EpcFile):
             self.nsppol = len(root.dimensions['number_of_spins'])
 
             # number_of_spins, number_of_kpoints, max_number_of_states
-            self.occ = root.variables['occupations'][:,:,:self.nband]
+            self.occ = root.variables['occupations'][:,kpt_idx,:self.nband]
 
             self.FAN = zeros((self.nkpt, self.nband, 3, self.natom,
                               3, self.natom, self.nband), dtype=np.complex)
@@ -47,7 +53,7 @@ class FanFile(EpcFile):
             # product_mband_nsppol, number_of_atoms,  number_of_cartesian_directions,
             # number_of_atoms, number_of_cartesian_directions,
             # number_of_kpoints, product_mband_nsppol*2
-            FANtmp = root.variables['second_derivative_eigenenergies_actif'][:self.nband*self.nsppol,:,:,:,:,:,:self.nband*self.nsppol*2]
+            FANtmp = root.variables['second_derivative_eigenenergies_actif'][:self.nband*self.nsppol,:,:,:,:,kpt_idx,:self.nband*self.nsppol*2]
             #FANtmp2 = zeros((self.nkpt,2*self.nband,3,self.natom,3,self.natom,self.nband))
             FANtmp2 = np.einsum('ijklmno->nomlkji', FANtmp)
             self.FAN.real[...] = FANtmp2[:, ::2, ...]
@@ -55,10 +61,8 @@ class FanFile(EpcFile):
             del FANtmp, FANtmp2
 
             # number_of_spins, number_of_kpoints, max_number_of_states   
-            self.eigenvalues = root.variables['eigenvalues'][:,:,:self.nband]
+            self.eigenvalues = root.variables['eigenvalues'][:,kpt_idx,:self.nband]
 
-            # number_of_kpoints, 3
-            self.kpt = root.variables['reduced_coordinates_of_kpoints'][:,:]
             self.qred = root.variables['current_q_point'][:]
             self.wtq = root.variables['current_q_point_weight'][:]
             self.rprimd = root.variables['primitive_vectors'][:,:]

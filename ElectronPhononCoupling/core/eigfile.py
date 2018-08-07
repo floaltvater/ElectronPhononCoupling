@@ -13,6 +13,8 @@ from .constants import tol6, kb_HaK
 
 from .mpi import MPI, comm, size, rank, mpi_watch
 
+from ..util.ncutil import get_kpt_map
+
 __all__ = ['EigFile']
 
 
@@ -20,6 +22,7 @@ class EigFile(EpcFile):
 
     def __init__(self, *args, **kwargs):
         self.max_nband = kwargs.pop('max_nband', None)
+        self.kpts_inp = kwargs.pop('kpts_inp', None)
         super(EigFile, self).__init__(*args, **kwargs)
         self.EIG = None
         self.degen = None
@@ -31,10 +34,11 @@ class EigFile(EpcFile):
         super(EigFile, self).read_nc(fname)
 
         with nc.Dataset(fname, 'r') as root:
+            keyword = 'Kptns'
+            kpt_idx = get_kpt_map(root, keyword, self.kpts_inp)
+            self.Kptns = root.variables[keyword][kpt_idx,:]
             # nspin, nkpt, nband
-            self.EIG = root.variables['Eigenvalues'][:,:,:self.max_nband] 
-            # nkpt, 3
-            self.Kptns = root.variables['Kptns'][:,:]
+            self.EIG = root.variables['Eigenvalues'][:,kpt_idx,:self.max_nband] 
 
     @mpi_watch
     def broadcast(self):
@@ -156,7 +160,7 @@ class EigFile(EpcFile):
             self.get_degen()
 
         nkpt, nband = arr.shape[-2:]
-    
+
         for ikpt in range(nkpt):
             for group in self.degen[ikpt]:
                 average = copy(arr[...,ikpt,group[0][1]])

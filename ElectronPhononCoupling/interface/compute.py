@@ -32,6 +32,7 @@ def compute(
         fermi_level = None,
         amu = None,
         max_nband = None,
+        kpts_inp = None,
 
         # File names
         rootname = 'epc.out',
@@ -157,6 +158,10 @@ def compute(
         Maximum number of bands to read from input files.
         All bands are read if not specified.
 
+    kpts_inp:
+        List of k-point coordinates to read from input files.
+        All k-points are read if not specified.
+
     File names
     ----------
 
@@ -227,6 +232,7 @@ def compute(
         fermi_level=fermi_level,
         amu=amu,
         max_nband=max_nband,
+        kpts_inp=kpts_inp,
 
         write=write,
         rootname=rootname,
