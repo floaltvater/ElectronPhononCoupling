@@ -79,7 +79,7 @@ class EpcAnalyzer(object):
                  fermi_level = None,
                  amu = None,
                  max_nband = None,
-                 kpts_inp = None,
+                 kpt_idx = None,
 
                  double_smearing = False,
                  smearing_width = 0.0367,
@@ -174,7 +174,7 @@ class EpcAnalyzer(object):
             asr=asr,
             amu=amu,
             max_nband=max_nband,
-            kpts_inp=kpts_inp,
+            kpt_idx=kpt_idx,
             double_smearing = double_smearing,
             smearing_width = smearing_width,
             smearing_above = smearing_above,

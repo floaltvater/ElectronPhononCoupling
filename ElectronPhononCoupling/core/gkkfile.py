@@ -15,7 +15,7 @@ from .mpi import MPI, comm, size, rank, mpi_watch
 
 from . import EpcFile
 
-from ..util.ncutil import nc_copy, get_kpt_map
+from ..util.ncutil import nc_copy
 
 __all__ = ['GkkFile']
 
@@ -24,7 +24,7 @@ class GkkFile(EpcFile):
     
     def __init__(self, *args, **kwargs):
         self.max_nband = kwargs.pop('max_nband', None)
-        self.kpts_inp = kwargs.pop('kpts_inp', None)
+        self.kpt_idx = kwargs.pop('kpt_idx', None)
         super(GkkFile, self).__init__(*args, **kwargs)
     
     def read_nc(self, fname=None):
@@ -36,9 +36,7 @@ class GkkFile(EpcFile):
         with nc.Dataset(fname, 'r') as root:
             self.natom = len(root.dimensions['number_of_atoms'])
 
-            keyword = 'reduced_coordinates_of_kpoints' 
-            kpt_idx = get_kpt_map(root, keyword, self.kpts_inp)
-            self.kpt = root.variables[keyword][kpt_idx,:]
+            self.kpt = root.variables['reduced_coordinates_of_kpoints'][self.kpt_idx,:]
             self.nkpt = self.kpt.shape[0]
 
             if self.max_nband is not None:
@@ -48,17 +46,17 @@ class GkkFile(EpcFile):
             self.nsppol = len(root.dimensions['number_of_spins'])
 
             # number_of_spins, number_of_kpoints, max_number_of_states
-            self.occ = root.variables['occupations'][:,kpt_idx,:self.nband]
+            self.occ = root.variables['occupations'][:,self.kpt_idx,:self.nband]
 
             # number_of_spins, number_of_kpoints, max_number_of_states   
-            self.eigenvalues = root.variables['eigenvalues'][:,kpt_idx,:self.nband]
+            self.eigenvalues = root.variables['eigenvalues'][:,self.kpt_idx,:self.nband]
 
             self.qred = root.variables['current_q_point'][:]
             self.wtq = root.variables['current_q_point_weight'][:]
             self.rprimd = root.variables['primitive_vectors'][:,:]
 
             # nband, natom, ncart, nkpt, product_mband_nsppol*2 
-            GKKtmp = root.variables['second_derivative_eigenenergies_actif'][:self.nband,:,:,kpt_idx,:self.nband*self.nsppol*2]
+            GKKtmp = root.variables['second_derivative_eigenenergies_actif'][:self.nband,:,:,self.kpt_idx,:self.nband*self.nsppol*2]
             GKKtmp2 = np.einsum('ijkno->nokji', GKKtmp)
             self.GKK = np.zeros((self.nkpt, self.nsppol*self.nband, 3, self.natom, self.nband), dtype=np.complex)
             self.GKK.real[...] = GKKtmp2[:, ::2, ...]

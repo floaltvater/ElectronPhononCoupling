@@ -11,8 +11,6 @@ from . import EpcFile, EigFile
 
 from .mpi import MPI, comm, size, rank, mpi_watch
 
-from ..util.ncutil import get_kpt_map
-
 __all__ = ['GsrFile']
 
 
@@ -20,7 +18,7 @@ class GsrFile(EigFile):
 
     def __init__(self, *args, **kwargs):
         self.max_nband = kwargs.pop('max_nband', None)
-        self.kpts_inp = kwargs.pop('kpts_inp', None)
+        self.kpt_idx = kwargs.pop('kpt_idx', None)
         super(GsrFile, self).__init__(*args, **kwargs)
         self.degen = None
 
@@ -31,12 +29,10 @@ class GsrFile(EigFile):
         #super(GsrFile, self).read_nc(fname)
 
         with nc.Dataset(fname, 'r') as root:
-            keyword = 'reduced_coordinates_of_kpoints'
-            kpt_idx = get_kpt_map(root, keyword, self.kpts_inp)
-            self.Kptns = root.variables[keyword][kpt_idx,:]
+            self.Kptns = root.variables['reduced_coordinates_of_kpoints'][self.kpt_idx,:]
 
-            self.EIG = root.variables['eigenvalues'][:,kpt_idx,:self.max_nband] 
-            self.occ = root.variables['occupations'][:,kpt_idx,:]
+            self.EIG = root.variables['eigenvalues'][:,self.kpt_idx,:self.max_nband] 
+            self.occ = root.variables['occupations'][:,self.kpt_idx,:]
             self.nspin, self.nkpt, self.nband = self.EIG.shape
 
     @mpi_watch
