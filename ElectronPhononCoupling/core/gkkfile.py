@@ -35,7 +35,8 @@ class GkkFile(EpcFile):
 
         with nc.Dataset(fname, 'r') as root:
             self.natom = len(root.dimensions['number_of_atoms'])
-
+            if self.kpt_idx is None:
+                self.kpt_idx = range(root.dimensions['number_of_kpoints'])
             self.kpt = root.variables['reduced_coordinates_of_kpoints'][self.kpt_idx,:]
             self.nkpt = self.kpt.shape[0]
 

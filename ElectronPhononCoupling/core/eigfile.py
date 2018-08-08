@@ -32,6 +32,8 @@ class EigFile(EpcFile):
         super(EigFile, self).read_nc(fname)
 
         with nc.Dataset(fname, 'r') as root:
+            if self.kpt_idx is None:
+                self.kpt_idx = range(root.dimensions['nkpt'])
             self.Kptns = root.variables['Kptns'][self.kpt_idx,:]
             # nspin, nkpt, nband
             self.EIG = root.variables['Eigenvalues'][:,self.kpt_idx,:self.max_nband] 

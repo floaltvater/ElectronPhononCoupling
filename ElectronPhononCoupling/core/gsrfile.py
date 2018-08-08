@@ -29,6 +29,8 @@ class GsrFile(EigFile):
         #super(GsrFile, self).read_nc(fname)
 
         with nc.Dataset(fname, 'r') as root:
+            if self.kpt_idx is None:
+                self.kpt_idx == range(root.dimensions['number_of_kpoints'])
             self.Kptns = root.variables['reduced_coordinates_of_kpoints'][self.kpt_idx,:]
 
             self.EIG = root.variables['eigenvalues'][:,self.kpt_idx,:self.max_nband] 
