@@ -118,6 +118,8 @@ class EpcAnalyzer(object):
         # Set basic quantities
         self.nqpt = nqpt
         self.set_weights(wtq)
+        self.max_nband = max_nband
+        self.kpt_idx = kpt_idx
 
         self.nqpt_fine = nqpt_fine
         self.set_weights_fine(wtq_fine)
@@ -1091,8 +1093,10 @@ class EpcAnalyzer(object):
 
             if self.kpt_idx is not None:
                 nkpt = len(self.kpt_idx)
+                kpt_idx = self.kpt_idx
             else:
                 nkpt = len(dim.dimensions['number_of_kpoints'])
+                kpt_idx = range(nkpt)
 
             # Create dimension
             ds.createDimension('number_of_atoms',
@@ -1115,17 +1119,17 @@ class EpcAnalyzer(object):
             # Write data on the eigenvalues
             data = ds.createVariable('reduced_coordinates_of_kpoints', 'd',
                                      ('number_of_kpoints','cartesian'))
-            data[:,:] = dim.variables['reduced_coordinates_of_kpoints'][:,:]
+            data[:,:] = dim.variables['reduced_coordinates_of_kpoints'][kpt_idx,:]
 
             data = ds.createVariable(
                 'eigenvalues','d',
                 ('number_of_spins','number_of_kpoints','max_number_of_states'))
-            data[:,:,:] = dim.variables['eigenvalues'][:,:,:]
+            data[:,:,:] = dim.variables['eigenvalues'][:,kpt_idx,:mband]
 
             data = ds.createVariable(
                 'occupations','i',
                 ('number_of_spins','number_of_kpoints','max_number_of_states'))
-            data[:,:,:] = dim.variables['occupations'][:,:,:]
+            data[:,:,:] = dim.variables['occupations'][:,kpt_idx,:mband]
 
             data = ds.createVariable(
                 'primitive_vectors', 'd',
