@@ -1089,11 +1089,15 @@ class EpcAnalyzer(object):
             mband = len(dim.dimensions['product_mband_nsppol']) / nsppol
             mband = min(self.max_nband, mband)
 
+            if self.kpt_idx is not None:
+                nkpt = len(self.kpt_idx)
+            else:
+                nkpt = len(dim.dimensions['number_of_kpoints'])
+
             # Create dimension
             ds.createDimension('number_of_atoms',
                                len(dim.dimensions['number_of_atoms']))
-            ds.createDimension('number_of_kpoints',
-                               len(dim.dimensions['number_of_kpoints']))
+            ds.createDimension('number_of_kpoints', nkpt)
             ds.createDimension('product_mband_nsppol', mband*nsppol)
 
             ds.createDimension('cartesian', 3)
