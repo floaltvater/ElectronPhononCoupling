@@ -117,6 +117,7 @@ class EpcAnalyzer(object):
         # Set basic quantities
         self.nqpt = nqpt
         self.set_weights(wtq)
+        self.max_nband = max_nband
 
         self.nqpt_fine = nqpt_fine
         self.set_weights_fine(wtq_fine)
@@ -1085,14 +1086,14 @@ class EpcAnalyzer(object):
             if nsppol > 1:
               warnings.warn("nsppol > 1 has not been tested.")
             mband = len(dim.dimensions['product_mband_nsppol']) / nsppol
+            mband = min(self.max_nband, mband)
 
             # Create dimension
             ds.createDimension('number_of_atoms',
                                len(dim.dimensions['number_of_atoms']))
             ds.createDimension('number_of_kpoints',
                                len(dim.dimensions['number_of_kpoints']))
-            ds.createDimension('product_mband_nsppol',
-                               len(dim.dimensions['product_mband_nsppol']))
+            ds.createDimension('product_mband_nsppol', mband*nsppol)
 
             ds.createDimension('cartesian', 3)
             ds.createDimension('cplex', 2)
