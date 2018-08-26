@@ -5,6 +5,7 @@ from copy import copy
 
 import numpy as np
 import netCDF4 as nc
+import sys
 
 from .constants import Ha2eV
 
@@ -104,7 +105,7 @@ class EpcAnalyzer(object):
                  ddb_fine_fnames=list(),
 
                  **kwargs):
-
+        
         # Check that the minimum number of files is present
         if not eigk_fname:
             raise Exception('Must provide a file for eigk_fname')
@@ -388,8 +389,7 @@ class EpcAnalyzer(object):
     @mpi_watch
     def distribute_workload(self, fine=False):
         """Distribute the q-points indicies to be treated by each worker."""
-        
-
+         
         if fine:
             self.my_iqpts = self.get_iqpts(self.nqpt_fine)
         else:
@@ -477,7 +477,6 @@ class EpcAnalyzer(object):
 
         iqpt = self.my_iqpts[0]
         self.set_iqpt(iqpt, fine=fine)
-
         if self.verbose:
             print("Q-point: {} with wtq = {} and reduced coord. {}".format(
                   iqpt, self.qptanalyzer.wtq, self.qptanalyzer.qred))
