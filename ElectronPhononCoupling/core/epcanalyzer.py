@@ -45,10 +45,13 @@ class EpcAnalyzer(object):
     zero_point_broadening = None
     temperature_dependent_renormalization = None
     temperature_dependent_broadening = None
+    temperature_dependent_broadening_modes = None
     zero_point_renormalization_modes = None
+    zero_point_broadening_modes = None
 
     self_energy = None
     self_energy_T = None
+    self_energy_T_modes = None
     self_energy_static = None
     self_energy_static_T = None
     self_energy_fan_active = None
@@ -753,6 +756,17 @@ class EpcAnalyzer(object):
             self.sum_qpt_function('get_tdb_dynamical'))
         self.broadening_is_dynamical = True
 
+    def compute_dynamical_td_broadening_modes(self):
+        """
+        Compute the temperature-dependent broadening in a static scheme
+        from the GKK files.
+        """
+        self.check_temperatures()
+        self.distribute_workload()
+        self.temperature_dependent_broadening_modes = (
+            self.sum_qpt_function('get_tdb_dynamical_modes'))
+        self.broadening_is_dynamical = True
+
     def compute_dynamical_zp_broadening(self):
         """
         Compute the zero-point broadening in a static scheme
@@ -844,6 +858,17 @@ class EpcAnalyzer(object):
         self.zero_point_renormalization_modes = (
             self.sum_qpt_function('get_zpr_dynamical_modes'))
         self.renormalization_is_dynamical = True
+
+    def compute_dynamical_zp_broadening_modes(self):
+        """
+        Compute the zero-point broadening in a dynamic scheme
+        with the transitions split between active and sternheimer.
+        Retain the mode decomposition of the broadening.
+        """
+        self.distribute_workload()
+        self.zero_point_broadening_modes = (
+            self.sum_qpt_function('get_zpb_dynamical_modes'))
+        self.broadening_is_dynamical = True
 
     def compute_zp_self_energy(self):
         """
@@ -1022,6 +1047,21 @@ class EpcAnalyzer(object):
         """
         self.distribute_workload()
         self.self_energy_T = self.sum_qpt_function('get_td_self_energy_active')
+
+    def compute_td_self_energy_active_modes(self):
+        """
+        Compute the temperature-dependent frequency-dependent self-energy
+        from the active part only (GKK), neglecting the Sternheimer part
+        (EIGR2D).
+    
+        The self-energy is evaluated on a frequency mesh 'omegase'
+        that is shifted by the bare energies, such that, what is retured is
+    
+            Simga'_kn(omega,T) = Sigma_kn(omega + E^0_kn,T)
+    
+        """
+        self.distribute_workload()
+        self.self_energy_T_modes = self.sum_qpt_function('get_td_self_energy_active_modes')
 
     def compute_zp_self_energy_active(self):
         """
@@ -1214,6 +1254,15 @@ class EpcAnalyzer(object):
                 # FIXME number of spin
                 data[0,:,:] = self.zero_point_broadening[:,:].real
 
+            data = ds.createVariable(
+                'zero_point_broadening_modes','d',
+                ('number_of_modes', 'number_of_spins', 'number_of_kpoints',
+                 'max_number_of_states'))
+
+            if self.zero_point_broadening_modes is not None:
+                # FIXME number of spin
+                data[:,0,:,:] = self.zero_point_broadening_modes[:,:,:].real
+
             zpr_modes = ds.createVariable(
                 'zero_point_renormalization_by_modes','d',
                 ('number_of_modes', 'number_of_spins', 'number_of_kpoints',
@@ -1233,6 +1282,17 @@ class EpcAnalyzer(object):
                 # FIXME number of spin
                 data[0,:,:,:] = (
                     self.temperature_dependent_broadening[:,:,:].real)
+
+            # TDB
+            data = ds.createVariable(
+                'temperature_dependent_broadening_modes','d',
+                ('number_of_modes','number_of_spins','number_of_kpoints',
+                 'max_number_of_states','number_of_temperature'))
+
+            if self.temperature_dependent_broadening_modes is not None:
+                # FIXME number of spin
+                data[:,0,:,:,:] = (
+                    self.temperature_dependent_broadening_modes[:,:,:,:].real)
 
             # ZSE
             self_energy = ds.createVariable('self_energy','d',
@@ -1277,6 +1337,18 @@ class EpcAnalyzer(object):
                 # FIXME number of spin
                 self_energy_T[0,:,:,:,:,0] = self.self_energy_T[:,:,:,:].real
                 self_energy_T[0,:,:,:,:,1] = self.self_energy_T[:,:,:,:].imag
+
+            # TSE_modes
+            self_energy_T_modes = ds.createVariable(
+                'self_energy_temperature_dependent_by_modes','d',
+                ('number_of_modes', 'number_of_spins', 'number_of_kpoints',
+                 'max_number_of_states', 'number_of_frequencies',
+                 'number_of_temperature', 'cplex'))
+
+            if self.self_energy_T_modes is not None:
+                # FIXME number of spin
+                self_energy_T_modes[:,0,:,:,:,:,0] = self.self_energy_T_modes[:,:,:,:,:].real
+                self_energy_T_modes[:,0,:,:,:,:,1] = self.self_energy_T_modes[:,:,:,:,:].imag
 
             # TSE static
             data = ds.createVariable(

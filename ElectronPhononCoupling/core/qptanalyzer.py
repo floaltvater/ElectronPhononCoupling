@@ -958,6 +958,30 @@ class QptAnalyzer(object):
             )
         return self.sigma
 
+    def get_td_self_energy_active_modes(self):
+        """
+        Compute the temperature depended and frequency-dependent
+        dynamical self-energy from one q-point.
+        Only include the active space contribution.
+    
+        The self-energy is evaluated on a frequency mesh 'omegase'
+        that is shifted by the bare energies, such that, what is retured is
+    
+            Simga'_kn(omega,T) = Sigma_kn(omega + E^0_kn, T)
+    
+        Returns: sigma[nmode,nkpt,nband,nomegase,ntemp]
+        """
+        self.sigma = self.get_self_energy(
+            mode=True,
+            temperature=True,
+            omega=True,
+            dynamical=True,
+            only_sternheimer=False,
+            only_active=True,
+            shape='oknlt',
+            )
+        return self.sigma
+
     def get_td_self_energy_sternheimer(self):
         """
         Compute the temperature depended and frequency-dependent
@@ -1207,6 +1231,16 @@ class QptAnalyzer(object):
                                        omega=False, dynamical=True)
         return self.zpb
     
+    def get_zpb_dynamical_modes(self):
+        """
+        Compute the zp broadening contribution from one q-point in a dynamical scheme.
+        Only take the active space contribution.
+        Returns: zpb[nkpt,nband]
+        """
+        self.zpb = self.get_broadening(mode=True, temperature=False,
+                                       omega=False, dynamical=True)
+        return self.zpb
+
     def get_tdb_dynamical(self):
         """
         Compute the td broadening contribution from one q-point in a dynamical scheme.
@@ -1219,6 +1253,21 @@ class QptAnalyzer(object):
             omega=False,
             dynamical=True,
             shape='knt',
+            )
+        return self.tdb
+    
+    def get_tdb_dynamical_modes(self):
+        """
+        Compute the td broadening contribution from one q-point in a dynamical scheme.
+        Only take the active space contribution.
+        Returns: zpb[nmode,nkpt,nband,ntemp]
+        """
+        self.tdb = self.get_broadening(
+            mode=True,
+            temperature=True,
+            omega=False,
+            dynamical=True,
+            shape='oknt',
             )
         return self.tdb
     
