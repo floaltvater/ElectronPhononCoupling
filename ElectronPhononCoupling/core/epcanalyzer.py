@@ -448,15 +448,39 @@ class EpcAnalyzer(object):
 
         partial_sum = self.sum_qpt_function_me(func_name, fine=fine,
                                                *args, **kwargs)
+        nmode, nkpt, nband, nomegase, ntemp = partial_sum.shape
 
         if i_am_master:
-            total = partial_sum
-            #active_ranks = self.get_active_ranks()
-            active_ranks = self.get_active_ranks(fine)
-            if len(active_ranks) > 1:
-                for irank in active_ranks[1:]:
-                    partial_sum = comm.recv(source=irank, tag=irank)
-                    total += partial_sum
+            with nc.Dataset("test.nc", 'w') as ds:
+
+                # Create dimension
+                ds.createDimension('number_of_qpoints', self.nqpt)
+                ds.createDimension('number_of_modes', nmode)
+                ds.createDimension('number_of_kpoints', nkpt)
+                ds.createDimension('max_number_of_states', nband)
+                ds.createDimension('number_of_frequencies', nomegase)
+                ds.createDimension('number_of_temperature', ntemp)
+                ds.createDimension('cplex', 2)
+                ds.createDimension('number_of_spins', 1)
+
+                self_energy_T_qpts_modes = ds.createVariable(
+                    'self_energy_temperature_dependent_by_modes','d',
+                    ('number_of_qpoints', 'number_of_modes', 'number_of_spins', 'number_of_kpoints',
+                     'max_number_of_states', 'number_of_frequencies',
+                     'number_of_temperature', 'cplex'))
+
+                self_energy_T_modes[0,:,0,:,:,:,:,0] = partial_sum.real
+                self_energy_T_modes[0,:,0,:,:,:,:,1] = partial_sum.imag
+
+                total = partial_sum
+                #active_ranks = self.get_active_ranks()
+                active_ranks = self.get_active_ranks(fine)
+                if len(active_ranks) > 1:
+                    for irank in active_ranks[1:]:
+                        partial_sum = comm.recv(source=irank, tag=irank)
+                        self_energy_T_modes[irank,:,0,:,:,:,:,0] = partial_sum.real
+                        self_energy_T_modes[irank,:,0,:,:,:,:,1] = partial_sum.imag
+                        total += partial_sum
 
         elif self.active_worker:
             comm.send(partial_sum, dest=0, tag=rank)

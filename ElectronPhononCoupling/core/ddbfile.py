@@ -250,7 +250,7 @@ class DdbFile(EpcFile):
         xi_at = zeros(3, dtype=complex)
 
         omega, eigvect = self.compute_dynmat()
-
+        
         for imode in range(self.nmode):
             # Skip mode with zero frequency (leave displacements null)
             if omega[imode].real < omega_tolerance and not noscale:
