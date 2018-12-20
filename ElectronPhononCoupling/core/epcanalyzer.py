@@ -445,12 +445,20 @@ class EpcAnalyzer(object):
     @mpi_watch
     def sum_qpt_function(self, func_name, fine=False, *args, **kwargs):
         """Call a certain function or each q-points and sum the result."""
-
         partial_sum = self.sum_qpt_function_me(func_name, fine=fine,
                                                *args, **kwargs)
         nmode, nkpt, nband, nomegase, ntemp = partial_sum.shape
 
         if i_am_master:
+            create_directory(self.nc_output)
+            if self.eigr2d_fnames:
+                dim_fname = self.eigr2d_fnames[0]
+            elif self.gkk_fnames:
+                dim_fname = self.gkk_fnames[0]
+            elif self.fan_fnames:
+                dim_fname = self.fan_fnames[0]
+            dim = nc.Dataset(dim_fname, 'r')
+            
             with nc.Dataset("test.nc", 'w') as ds:
 
                 # Create dimension
@@ -461,16 +469,54 @@ class EpcAnalyzer(object):
                 ds.createDimension('number_of_frequencies', nomegase)
                 ds.createDimension('number_of_temperature', ntemp)
                 ds.createDimension('cplex', 2)
+                ds.createDimension('cartesian', 3)
                 ds.createDimension('number_of_spins', 1)
 
+                # Write data on the eigenvalues
+                data = ds.createVariable('reduced_coordinates_of_kpoints', 'd',
+                                         ('number_of_kpoints','cartesian'))
+                data[:,:] = dim.variables['reduced_coordinates_of_kpoints'][:,:]
+
+                data = ds.createVariable(
+                    'eigenvalues','d',
+                    ('number_of_spins','number_of_kpoints','max_number_of_states'))
+                data[:,:,:] = dim.variables['eigenvalues'][:,:,:nband]
+
                 self_energy_T_qpts_modes = ds.createVariable(
-                    'self_energy_temperature_dependent_by_modes','d',
+                    'self_energy_temperature_dependent_by_qpts_modes','d',
                     ('number_of_qpoints', 'number_of_modes', 'number_of_spins', 'number_of_kpoints',
                      'max_number_of_states', 'number_of_frequencies',
                      'number_of_temperature', 'cplex'))
+                self_energy_T_modes = ds.createVariable(
+                    'self_energy_temperature_dependent_by_modes','d',
+                    ('number_of_modes', 'number_of_spins', 'number_of_kpoints',
+                     'max_number_of_states', 'number_of_frequencies',
+                     'number_of_temperature', 'cplex'))
 
-                self_energy_T_modes[0,:,0,:,:,:,:,0] = partial_sum.real
-                self_energy_T_modes[0,:,0,:,:,:,:,1] = partial_sum.imag
+                self_energy_T_qpts_modes[0,:,0,:,:,:,:,0] = partial_sum.real
+                self_energy_T_qpts_modes[0,:,0,:,:,:,:,1] = partial_sum.imag
+                
+                data = ds.createVariable('omegase', 'd',
+                                         ('number_of_frequencies'))
+                data[:] = self.omegase[:]
+                data = ds.createVariable('temperatures','d',
+                                         ('number_of_temperature'))
+                data[:] = self.temperatures[:]
+                data = ds.createVariable('smearing', 'd')
+                data[:] = self.smearing
+                # qpt
+                data = ds.createVariable(
+                    'reduced_coordinates_of_qpoints','d',
+                    ('number_of_qpoints', 'cartesian'))
+                if self.qred is not None:
+                    data[...] = self.qred[...]
+
+                # omega
+                data = ds.createVariable(
+                    'phonon_mode_frequencies','d',
+                    ('number_of_qpoints', 'number_of_modes'))
+                if self.omega is not None:
+                    data[...] = self.omega[...]
 
                 total = partial_sum
                 #active_ranks = self.get_active_ranks()
@@ -478,10 +524,14 @@ class EpcAnalyzer(object):
                 if len(active_ranks) > 1:
                     for irank in active_ranks[1:]:
                         partial_sum = comm.recv(source=irank, tag=irank)
-                        self_energy_T_modes[irank,:,0,:,:,:,:,0] = partial_sum.real
-                        self_energy_T_modes[irank,:,0,:,:,:,:,1] = partial_sum.imag
+                        self_energy_T_qpts_modes[irank,:,0,:,:,:,:,0] = partial_sum.real
+                        self_energy_T_qpts_modes[irank,:,0,:,:,:,:,1] = partial_sum.imag
                         total += partial_sum
 
+                        print(irank)
+                        sys.stdout.flush()
+                self_energy_T_modes[:,0,:,:,:,:,0] = total.real
+                self_energy_T_modes[:,0,:,:,:,:,1] = total.imag
         elif self.active_worker:
             comm.send(partial_sum, dest=0, tag=rank)
             return
