@@ -6,6 +6,7 @@ from copy import copy
 import numpy as np
 import netCDF4 as nc
 import sys
+import os
 
 from .constants import Ha2eV
 
@@ -502,6 +503,55 @@ class EpcAnalyzer(object):
             total += qpt
 
         return total
+
+    @mpi_watch
+    def gather_qpt_function_and_write(self, func_name, *args, **kwargs):
+        """
+        Call a certain function or each q-points and gather all results to master.
+        Write every q-point to nc file.
+        """
+
+        partial = self.gather_qpt_function_me(func_name, *args, **kwargs)
+
+        if i_am_master:
+            if not os.path.exists(self.nc_output):
+                self.write_netcdf()
+
+            ds = nc.Dataset(self.nc_output, "a")
+            if not "self_energy_temperature_dependent_by_qpts_modes" in ds.variables.keys():
+                self_energy_T_qpts_modes = ds.createVariable(
+                    'self_energy_temperature_dependent_by_qpts_modes','d',
+                    ('number_of_qpoints', 'number_of_modes',
+                     'number_of_spins', 'number_of_kpoints',
+                     'max_number_of_states', 'number_of_frequencies',
+                     'number_of_temperature', 'cplex'))
+            else:
+                self_energy_T_qpts_modes = ds.variables["self_energy_temperature_dependent_by_qpts_modes"]
+            for i, arr in enumerate(partial):
+                self_energy_T_qpts_modes[i,:,0,:,:,:,:,0] = arr[...].real
+                self_energy_T_qpts_modes[i,:,0,:,:,:,:,1] = arr[...].imag
+
+            active_ranks = self.get_active_ranks()
+            if len(active_ranks) > 1:
+                for irank in active_ranks[1:]:
+                    partial = comm.recv(source=irank, tag=irank)
+                    for arr in partial:
+                        i += 1
+                        self_energy_T_qpts_modes[i,:,0,:,:,:,:,0] = arr[...].real
+                        self_energy_T_qpts_modes[i,:,0,:,:,:,:,1] = arr[...].imag
+
+        elif self.active_worker:
+            comm.send(partial, dest=0, tag=rank)
+            return
+
+        else:
+            return
+
+        # Now I could broadcast the total result to all workers
+        # but right now there is no need to.
+        ds.close()
+
+        return
 
     @mpi_watch
     def gather_qpt_function(self, func_name, *args, **kwargs):
