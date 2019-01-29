@@ -19,7 +19,7 @@ __all__ = ['Eigr2dFile']
 class Eigr2dFile(EpcFile):
 
     def __init__(self, *args, **kwargs):
-        self.max_nband = kwargs.pop('max_nband', None)
+        self.nbands_only = kwargs.pop('nbands_only', None)
         self.kpt_idx = kwargs.pop('kpt_idx', None)
         super(Eigr2dFile, self).__init__(*args, **kwargs)
 
@@ -34,24 +34,31 @@ class Eigr2dFile(EpcFile):
             self.natom = len(root.dimensions['number_of_atoms'])
 
             if self.kpt_idx is None:
-                self.kpt_idx = range(len(root.dimensions['number_of_kpoints']))
-            self.kpt = root.variables['reduced_coordinates_of_kpoints'][self.kpt_idx,:]
+                kpt_idx = range(len(root.dimensions['number_of_kpoints']))
+            else:
+                kpt_idx = self.kpt_idx
+            self.kpt = root.variables['reduced_coordinates_of_kpoints'][kpt_idx,:]
             self.nkpt = self.kpt.shape[0]
 
-            if self.max_nband is not None:
-                self.nband = min(self.max_nband, len(root.dimensions['max_number_of_states']))
+            if self.nbands_only:
+                self.nband = len(self.nbands_only)
             else:
                 self.nband = len(root.dimensions['max_number_of_states'])
+            nbd_idx = self.nbands_only or range(self.nband)
+            max_nband = len(root.dimensions['max_number_of_states'])
             self.nsppol = len(root.dimensions['number_of_spins'])
 
             # number_of_spins, number_of_kpoints, max_number_of_states
-            self.occ = root.variables['occupations'][:,self.kpt_idx,:self.nband]
+            self.occ = root.variables['occupations'][:,kpt_idx,nbd_idx]
 
             self.EIG2D = zeros((self.nkpt, self.nband, 3, self.natom, 3, self.natom), dtype=np.complex)
 
             # number_of_atoms, number_of_cartesian_directions, number_of_atoms, number_of_cartesian_directions,
             # number_of_kpoints, product_mband_nsppol, cplex
-            EIG2Dtmp = root.variables['second_derivative_eigenenergies'][:,:,:,:,self.kpt_idx,:self.nband*self.nsppol,:]
+            # I believe product_mband_nsppol means that the values are ordered according to
+            # iband+mband*isppol for isppol in range(nsppol) for iband in range(mband)
+            nband_nsppol = [ib+max_nband*ip for ip in range(self.nsppol) for ib in nbd_idx] 
+            EIG2Dtmp = root.variables['second_derivative_eigenenergies'][:,:,:,:,kpt_idx,nband_nsppol,:]
 
             EIG2Dtmp2 = np.einsum('ijklmno->mnlkjio', EIG2Dtmp)
 
@@ -61,7 +68,7 @@ class Eigr2dFile(EpcFile):
             del EIG2Dtmp, EIG2Dtmp2
 
             # number_of_spins, number_of_kpoints, max_number_of_states   
-            self.eigenvalues = root.variables['eigenvalues'][:,self.kpt_idx,:self.nband]
+            self.eigenvalues = root.variables['eigenvalues'][:,kpt_idx,nbd_isx]
 
             self.qred = root.variables['current_q_point'][:]
             self.wtq = root.variables['current_q_point_weight'][:]

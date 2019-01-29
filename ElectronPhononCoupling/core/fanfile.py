@@ -19,7 +19,7 @@ __all__ = ['FanFile']
 class FanFile(EpcFile):
     
     def __init__(self, *args, **kwargs):
-        self.max_nband = kwargs.pop('max_nband', None)
+        self.nbands_only = kwargs.pop('nbands_only', None)
         self.kpt_idx = kwargs.pop('kpt_idx', None)
         super(FanFile, self).__init__(*args, **kwargs)
     
@@ -33,17 +33,22 @@ class FanFile(EpcFile):
 
             self.natom = len(root.dimensions['number_of_atoms'])
             if self.kpt_idx is None:
-                self.kpt_idx == range(len(root.dimensions['number_of_kpoints']))
-            self.kpt = root.variables['reduced_coordinates_of_kpoints'][self.kpt_idx,:]
+                kpt_idx = range(len(root.dimensions['number_of_kpoints']))
+            else:
+                kpt_idx = self.kpt_idx
+            self.kpt = root.variables['reduced_coordinates_of_kpoints'][kpt_idx,:]
             self.nkpt = self.kpt.shape[0]
-            if self.max_nband is not None:
-                self.nband = min(self.max_nband, len(root.dimensions['max_number_of_states']))
+            
+            if self.nbands_only:
+                self.nband = len(self.nbands_only)
             else:
                 self.nband = len(root.dimensions['max_number_of_states'])
+            nbd_idx = self.nbands_only or range(self.nband)
+            max_nband = len(root.dimensions['max_number_of_states'])
             self.nsppol = len(root.dimensions['number_of_spins'])
-
+            
             # number_of_spins, number_of_kpoints, max_number_of_states
-            self.occ = root.variables['occupations'][:,self.kpt_idx,:self.nband]
+            self.occ = root.variables['occupations'][:,kpt_idx,nbd_idx]
 
             self.FAN = zeros((self.nkpt, self.nband, 3, self.natom,
                               3, self.natom, self.nband), dtype=np.complex)
@@ -51,7 +56,11 @@ class FanFile(EpcFile):
             # product_mband_nsppol, number_of_atoms,  number_of_cartesian_directions,
             # number_of_atoms, number_of_cartesian_directions,
             # number_of_kpoints, product_mband_nsppol*2
-            FANtmp = root.variables['second_derivative_eigenenergies_actif'][:self.nband*self.nsppol,:,:,:,:,self.kpt_idx,:self.nband*self.nsppol*2]
+            # I believe product_mband_nsppol means that the values are ordered according to
+            # iband+mband*isppol for isppol in range(nsppol) for iband in range(mband)
+            nband_nsppol = [ib+max_nband*ip for ip in range(self.nsppol) for ib in nbd_idx] 
+            nband_nsppol_cplx = [c+ib*2+max_nband*ip*2 for ip in range(self.nsppol) for ib in nbd_idx for c in range(2)] 
+            FANtmp = root.variables['second_derivative_eigenenergies_actif'][nband_nsppol,:,:,:,:,kpt_idx,nband_nsppol_cplx]
             #FANtmp2 = zeros((self.nkpt,2*self.nband,3,self.natom,3,self.natom,self.nband))
             FANtmp2 = np.einsum('ijklmno->nomlkji', FANtmp)
             self.FAN.real[...] = FANtmp2[:, ::2, ...]
@@ -59,7 +68,7 @@ class FanFile(EpcFile):
             del FANtmp, FANtmp2
 
             # number_of_spins, number_of_kpoints, max_number_of_states   
-            self.eigenvalues = root.variables['eigenvalues'][:,self.kpt_idx,:self.nband]
+            self.eigenvalues = root.variables['eigenvalues'][:,kpt_idx,nbd_idx]
 
             self.qred = root.variables['current_q_point'][:]
             self.wtq = root.variables['current_q_point_weight'][:]

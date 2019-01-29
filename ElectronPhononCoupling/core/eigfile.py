@@ -19,7 +19,7 @@ __all__ = ['EigFile']
 class EigFile(EpcFile):
 
     def __init__(self, *args, **kwargs):
-        self.max_nband = kwargs.pop('max_nband', None)
+        self.nbands_only = kwargs.pop('nbands_only', None)
         self.kpt_idx = kwargs.pop('kpt_idx', None)
         super(EigFile, self).__init__(*args, **kwargs)
         self.EIG = None
@@ -32,11 +32,11 @@ class EigFile(EpcFile):
         super(EigFile, self).read_nc(fname)
 
         with nc.Dataset(fname, 'r') as root:
-            if self.kpt_idx is None:
-                self.kpt_idx = range(len(root.dimensions['nkpt']))
-            self.Kptns = root.variables['Kptns'][self.kpt_idx,:]
+            kpt_idx = self.kpt_idx or range(len(root.dimensions['nkpt']))
+            self.Kptns = root.variables['Kptns'][kpt_idx,:]
+            nbd_idx = self.nbands_only or range(len(root.dimensions['nband']))
             # nspin, nkpt, nband
-            self.EIG = root.variables['Eigenvalues'][:,self.kpt_idx,:self.max_nband] 
+            self.EIG = root.variables['Eigenvalues'][:,kpt_idx,nbd_idx] 
 
     @mpi_watch
     def broadcast(self):

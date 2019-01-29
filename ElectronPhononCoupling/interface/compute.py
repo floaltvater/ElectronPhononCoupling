@@ -29,9 +29,10 @@ def compute(
         smearing_eV = 0.01,
         temp_range = [0, 600, 50],
         omega_range = [-0.1, 0.1, 0.001],
+        omega_list = None,
         fermi_level = None,
         amu = None,
-        max_nband = None,
+        nbands_only = None,
         kpt_idx = None,
 
         # File names
@@ -154,8 +155,8 @@ def compute(
         The atomic masses, in amu.
         Will be read from the files if not specified.
 
-    max_nband:
-        Maximum number of bands to read from input files.
+    nbands_only:
+        List of bands to read in. No other bands will be read.
         All bands are read if not specified.
 
     kpt_idx:
@@ -228,10 +229,11 @@ def compute(
 
         temp_range=temp_range,
         omega_range=omega_range,
+        omega_list=omega_list,
         smearing=smearing_Ha,
         fermi_level=fermi_level,
         amu=amu,
-        max_nband=max_nband,
+        nbands_only=nbands_only,
         kpt_idx=kpt_idx,
 
         write=write,

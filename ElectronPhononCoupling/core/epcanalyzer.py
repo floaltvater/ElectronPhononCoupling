@@ -80,10 +80,11 @@ class EpcAnalyzer(object):
                  wtq=[1.0],
                  temp_range=[0,0,1],
                  omega_range=[0,0,1],
+                 omega_list=None,
                  smearing=0.00367,
                  fermi_level = None,
                  amu = None,
-                 max_nband = None,
+                 nbands_only = None,
                  kpt_idx = None,
 
                  double_smearing = False,
@@ -123,7 +124,7 @@ class EpcAnalyzer(object):
         # Set basic quantities
         self.nqpt = nqpt
         self.set_weights(wtq)
-        self.max_nband = max_nband
+        self.nbands_only = nbands_only
         self.kpt_idx = kpt_idx
 
         self.nqpt_fine = nqpt_fine
@@ -180,7 +181,7 @@ class EpcAnalyzer(object):
             gkk0_fname=gkk0,
             asr=asr,
             amu=amu,
-            max_nband=max_nband,
+            nbands_only = nbands_only,
             kpt_idx=kpt_idx,
             double_smearing = double_smearing,
             smearing_width = smearing_width,
@@ -196,7 +197,7 @@ class EpcAnalyzer(object):
 
         # Set parameters
         self.set_temp_range(temp_range)
-        self.set_omega_range(omega_range)
+        self.set_omega_range(omega_range, omega_list)
         self.set_smearing(smearing)
         self.set_rootname(rootname)
 
@@ -282,9 +283,12 @@ class EpcAnalyzer(object):
                           'Please specify it with the "temp_range" '
                           'keyword argument ')
 
-    def set_omega_range(self, omega_range=(0, 0, 1)):
-        """Set the minimum, makimum and step frequency for the self-energy."""
-        self.omegase = np.arange(*omega_range, dtype=float)
+    def set_omega_range(self, omega_range=(0, 0, 1), omega_list=None):
+        """Set the minimum, maximum and step frequency for the self-energy."""
+        if omega_range is not None:
+            self.omegase = np.arange(*omega_range, dtype=float)
+        else:
+            self.omegase = np.array(omega_list, dtype=float)
         self.qptanalyzer.omegase = self.omegase
 
     def set_smearing(self, smearing_Ha):
@@ -518,6 +522,12 @@ class EpcAnalyzer(object):
                 self.write_netcdf()
 
             ds = nc.Dataset(self.nc_output, "a")
+            if self.kpt_idx is None:
+                kpt_idx = range(len(ds.dimensions['number_of_kpoints']))
+            else:
+                kpt_idx = self.kpt_idx
+
+            nbd_idx = self.nbands_only or range(self.nband)
             if not "self_energy_temperature_dependent_by_qpts_modes" in ds.variables.keys():
                 self_energy_T_qpts_modes = ds.createVariable(
                     'self_energy_temperature_dependent_by_qpts_modes','d',
@@ -528,8 +538,8 @@ class EpcAnalyzer(object):
             else:
                 self_energy_T_qpts_modes = ds.variables["self_energy_temperature_dependent_by_qpts_modes"]
             for i, arr in enumerate(partial):
-                self_energy_T_qpts_modes[i,:,0,:,:,:,:,0] = arr[...].real
-                self_energy_T_qpts_modes[i,:,0,:,:,:,:,1] = arr[...].imag
+                self_energy_T_qpts_modes[i,:,0,kpt_idx,nbd_idx,:,:,0] = arr[:,:,:,:,:].real
+                self_energy_T_qpts_modes[i,:,0,kpt_idx,nbd_idx,:,:,1] = arr[:,:,:,:,:].imag
 
             active_ranks = self.get_active_ranks()
             if len(active_ranks) > 1:
@@ -537,8 +547,10 @@ class EpcAnalyzer(object):
                     partial = comm.recv(source=irank, tag=irank)
                     for arr in partial:
                         i += 1
-                        self_energy_T_qpts_modes[i,:,0,:,:,:,:,0] = arr[...].real
-                        self_energy_T_qpts_modes[i,:,0,:,:,:,:,1] = arr[...].imag
+                        self_energy_T_qpts_modes[i,:,0,kpt_idx,nbd_idx,:,:,0] = arr[:,:,:,:,:].real
+                        self_energy_T_qpts_modes[i,:,0,kpt_idx,nbd_idx,:,:,1] = arr[:,:,:,:,:].imag
+                        #self_energy_T_qpts_modes[i,:,0,:,:,:,:,0] = arr[...].real
+                        #self_energy_T_qpts_modes[i,:,0,:,:,:,:,1] = arr[...].imag
 
         elif self.active_worker:
             comm.send(partial, dest=0, tag=rank)
@@ -1178,14 +1190,15 @@ class EpcAnalyzer(object):
             if nsppol > 1:
               warnings.warn("nsppol > 1 has not been tested.")
             mband = len(dim.dimensions['product_mband_nsppol']) / nsppol
-            mband = min(self.max_nband, mband)
-
+            if self.nbands_only is not None:
+                nbd_idx = self.nbands_only
+            else:
+                nbd_idx = range(mband)
+            nkpt = len(dim.dimensions['number_of_kpoints'])
             if self.kpt_idx is not None:
-                nkpt = len(self.kpt_idx)
                 kpt_idx = self.kpt_idx
             else:
-                nkpt = len(dim.dimensions['number_of_kpoints'])
-                kpt_idx = range(nkpt)
+                kpt_idx = list(range(nkpt))
 
             # Create dimension
             ds.createDimension('number_of_atoms',
@@ -1208,17 +1221,17 @@ class EpcAnalyzer(object):
             # Write data on the eigenvalues
             data = ds.createVariable('reduced_coordinates_of_kpoints', 'd',
                                      ('number_of_kpoints','cartesian'))
-            data[:,:] = dim.variables['reduced_coordinates_of_kpoints'][kpt_idx,:]
+            data[kpt_idx,:] = dim.variables['reduced_coordinates_of_kpoints'][kpt_idx,:]
 
             data = ds.createVariable(
                 'eigenvalues','d',
                 ('number_of_spins','number_of_kpoints','max_number_of_states'))
-            data[:,:,:] = dim.variables['eigenvalues'][:,kpt_idx,:mband]
+            data[:,kpt_idx,nbd_idx] = dim.variables['eigenvalues'][:,kpt_idx,nbd_idx]
 
             data = ds.createVariable(
                 'occupations','i',
                 ('number_of_spins','number_of_kpoints','max_number_of_states'))
-            data[:,:,:] = dim.variables['occupations'][:,kpt_idx,:mband]
+            data[:,kpt_idx,nbd_idx] = dim.variables['occupations'][:,kpt_idx,nbd_idx]
 
             data = ds.createVariable(
                 'primitive_vectors', 'd',
@@ -1279,7 +1292,7 @@ class EpcAnalyzer(object):
 
             if self.zero_point_renormalization is not None:
                 # FIXME number of spin
-                zpr[0,:,:] = self.zero_point_renormalization[:,:].real
+                zpr[0,kpt_idx,nbd_idx] = self.zero_point_renormalization[:,:].real
                 #fan[0,:,:] = self.fan_zero_point_renormalization[:,:].real
                 #ddw[0,:,:] = self.ddw_zero_point_renormalization[:,:].real
 
@@ -1291,7 +1304,7 @@ class EpcAnalyzer(object):
 
             if self.temperature_dependent_renormalization is not None:
                 # FIXME number of spin
-                data[0,:,:,:] = (
+                data[0,kpt_idx,nbd_idx,:] = (
                     self.temperature_dependent_renormalization[:,:,:].real)
 
             # ZPR
@@ -1302,7 +1315,7 @@ class EpcAnalyzer(object):
 
             if self.zero_point_broadening is not None:
                 # FIXME number of spin
-                data[0,:,:] = self.zero_point_broadening[:,:].real
+                data[0,kpt_idx,nbd_idx] = self.zero_point_broadening[:,:].real
 
             data = ds.createVariable(
                 'zero_point_broadening_modes','d',
@@ -1311,7 +1324,7 @@ class EpcAnalyzer(object):
 
             if self.zero_point_broadening_modes is not None:
                 # FIXME number of spin
-                data[:,0,:,:] = self.zero_point_broadening_modes[:,:,:].real
+                data[:,0,kpt_idx,nbd_idx] = self.zero_point_broadening_modes[:,:,:].real
 
             zpr_modes = ds.createVariable(
                 'zero_point_renormalization_by_modes','d',
@@ -1319,7 +1332,7 @@ class EpcAnalyzer(object):
                  'max_number_of_states'))
 
             if self.zero_point_renormalization_modes is not None:
-                zpr_modes[:,0,:,:] = (
+                zpr_modes[:,0,kpt_idx,nbd_idx] = (
                 self.zero_point_renormalization_modes[:,:,:])
 
             # TDB
@@ -1330,7 +1343,7 @@ class EpcAnalyzer(object):
 
             if self.temperature_dependent_broadening is not None:
                 # FIXME number of spin
-                data[0,:,:,:] = (
+                data[0,kpt_idx,nbd_idx,:] = (
                     self.temperature_dependent_broadening[:,:,:].real)
 
             # TDB
@@ -1341,7 +1354,7 @@ class EpcAnalyzer(object):
 
             if self.temperature_dependent_broadening_modes is not None:
                 # FIXME number of spin
-                data[:,0,:,:,:] = (
+                data[:,0,kpt_idx,nbd_idx,:] = (
                     self.temperature_dependent_broadening_modes[:,:,:,:].real)
 
             # ZSE
@@ -1352,8 +1365,10 @@ class EpcAnalyzer(object):
             if self.self_energy is not None:
 
                 # FIXME number of spin
-                self_energy[0,:,:,:,0] = self.self_energy[:,:,:].real
-                self_energy[0,:,:,:,1] = self.self_energy[:,:,:].imag
+                self_energy[0,kpt_idx,nbd_idx,:,0] = (
+                        self.self_energy[:,:,:].real)
+                self_energy[0,kpt_idx,nbd_idx,:,1] = (
+                        self.self_energy[:,:,:].imag)
 
             # ZSE fan active
             self_energy_fan_active = ds.createVariable('self_energy_fan_active','d',
@@ -1363,8 +1378,10 @@ class EpcAnalyzer(object):
             if self.self_energy_fan_active is not None:
 
                 # FIXME number of spin
-                self_energy_fan_active[0,:,:,:,0] = self.self_energy_fan_active[:,:,:].real
-                self_energy_fan_active[0,:,:,:,1] = self.self_energy_fan_active[:,:,:].imag
+                self_energy_fan_active[0,kpt_idx,nbd_idx,:,0] = (
+                        self.self_energy_fan_active[:,:,:].real)
+                self_energy_fan_active[0,kpt_idx,nbd_idx,:,1] = (
+                        self.self_energy_fan_active[:,:,:].imag)
 
             # ZSE static
             data = ds.createVariable(
@@ -1374,7 +1391,8 @@ class EpcAnalyzer(object):
 
             if self.self_energy_static is not None:
                 # FIXME number of spin
-                data[0,:,:] = self.self_energy_static[:,:].real
+                data[0,kpt_idx,nbd_idx] = (
+                        self.self_energy_static[:,:].real)
 
             # TSE
             self_energy_T = ds.createVariable(
@@ -1385,8 +1403,10 @@ class EpcAnalyzer(object):
 
             if self.self_energy_T is not None:
                 # FIXME number of spin
-                self_energy_T[0,:,:,:,:,0] = self.self_energy_T[:,:,:,:].real
-                self_energy_T[0,:,:,:,:,1] = self.self_energy_T[:,:,:,:].imag
+                self_energy_T[0,kpt_idx,nbd_idx,:,:,0] = (
+                        self.self_energy_T[:,:,:,:].real)
+                self_energy_T[0,kpt_idx,nbd_idx,:,:,1] = (
+                        self.self_energy_T[:,:,:,:].imag)
 
             # TSE_modes
             self_energy_T_modes = ds.createVariable(
@@ -1397,8 +1417,10 @@ class EpcAnalyzer(object):
 
             if self.self_energy_T_modes is not None:
                 # FIXME number of spin
-                self_energy_T_modes[:,0,:,:,:,:,0] = self.self_energy_T_modes[:,:,:,:,:].real
-                self_energy_T_modes[:,0,:,:,:,:,1] = self.self_energy_T_modes[:,:,:,:,:].imag
+                self_energy_T_modes[:,0,kpt_idx,nbd_idx,:,:,0] = (
+                    self.self_energy_T_modes[:,:,:,:,:].real)
+                self_energy_T_modes[:,0,kpt_idx,nbd_idx,:,:,1] = (
+                    self.self_energy_T_modes[:,:,:,:,:].imag)
 
             # TSE static
             data = ds.createVariable(
@@ -1408,7 +1430,7 @@ class EpcAnalyzer(object):
 
             if self.self_energy_static_T is not None:
                 # FIXME number of spin
-                data[0,:,:,:] = self.self_energy_static_T[:,:,:].real
+                data[0,kpt_idx,nbd_idx,:] = self.self_energy_static_T[:,:,:].real
 
             # ZSF
             spectral_function = ds.createVariable(
@@ -1418,7 +1440,7 @@ class EpcAnalyzer(object):
 
             if self.spectral_function is not None:
                 # FIXME number of spin
-                spectral_function[0,:,:,:] = self.spectral_function[:,:,:]
+                spectral_function[0,kpt_idx,nbd_idx,:] = self.spectral_function[:,:,:]
 
             spectral_function_T = ds.createVariable(
                 'spectral_function_temperature_dependent','d',
@@ -1429,7 +1451,7 @@ class EpcAnalyzer(object):
             # TSF
             if self.spectral_function_T is not None:
                 # FIXME number of spin
-                spectral_function_T[0,:,:,:,:] = (
+                spectral_function_T[0,kpt_idx,nbd_idx,:,:] = (
                     self.spectral_function_T[:,:,:,:])
         return
 

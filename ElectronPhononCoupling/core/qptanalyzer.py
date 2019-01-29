@@ -31,7 +31,7 @@ class QptAnalyzer(object):
                  temperatures=None,
                  omegase=None,
                  amu=None,
-                 max_nband=None,
+                 nbands_only=None,
                  kpt_idx=None,
                  asr=True,
                  mu=None,
@@ -41,7 +41,7 @@ class QptAnalyzer(object):
                  smearing_below = 0.00367,
                  ):
         
-        readin = dict(max_nband=max_nband, kpt_idx=kpt_idx)
+        readin = dict(nbands_only=nbands_only, kpt_idx=kpt_idx)
         # Files
         self.ddb = DdbFile(ddb_fname, read=False, asr=asr)
         self.eigq = EigFile(eigq_fname, read=False, **readin)
