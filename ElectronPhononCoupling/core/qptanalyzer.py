@@ -209,6 +209,13 @@ class QptAnalyzer(object):
                 break
             E_last = E
 
+        if E_last == eig[0]:
+            m = ("It seems like you're only using unoccupied states. Therefore "
+                 "guessing the valence band maximum and hence Fermi level "
+                 "doesn't work. Please make sure to set the fermi_level "
+                 "manually.")
+            warnings.warn(m)
+
         return E_last
 
     def get_min_cond(self):
@@ -219,6 +226,12 @@ class QptAnalyzer(object):
         for f, E in zip(occ0, eig):
             if f <= 0.5:
                 break
+        else:
+            m = ("It seems like you're only using occupied states. Therefore "
+                 "guessing the conduction band minimum and hence Fermi level "
+                 "doesn't work. Please make sure to set the fermi_level "
+                 "manually.")
+            warnings.warn(m)
 
         return E
 

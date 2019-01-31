@@ -34,7 +34,7 @@ class EigFile(EpcFile):
         with nc.Dataset(fname, 'r') as root:
             kpt_idx = self.kpt_idx or range(len(root.dimensions['nkpt']))
             self.Kptns = root.variables['Kptns'][kpt_idx,:]
-            nbd_idx = self.nbands_only or range(len(root.dimensions['nband']))
+            nbd_idx = self.nbands_only or range(len(root.dimensions['mband']))
             # nspin, nkpt, nband
             self.EIG = root.variables['Eigenvalues'][:,kpt_idx,nbd_idx] 
 
