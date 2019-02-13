@@ -48,16 +48,16 @@ class GsrFile(EigFile):
         """
         Limit the number of eigenvalues to nband_max bands.
         """
-        self.EIG = self.EIG[:,:,:nband_max]
-        self.occ = self.occ[:,:,:nband_max]
+        self.EIG = self.EIG[:,:,:nband_max].copy()
+        self.occ = self.occ[:,:,:nband_max].copy()
 
     def trim_nkpt(self, idx_kpt):
         """
         Limit the number of k-points.
         """
-        self.EIG = self.EIG[:,idx_kpt,:]
-        self.Kptns = self.Kptns[idx_kpt,:]
-        self.occ = self.occ[:,idx_kpt,:]
+        self.EIG = self.EIG[:,idx_kpt,:].copy()
+        self.Kptns = self.Kptns[idx_kpt,:].copy()
+        self.occ = self.occ[:,idx_kpt,:].copy()
 
     @mpi_watch
     def broadcast(self):
@@ -65,11 +65,9 @@ class GsrFile(EigFile):
         comm.Barrier()
 
         if rank == 0:
-            nspin, nkpt, nband = self.EIG.shape
-            dim = np.array([nspin, nkpt, nband], dtype=np.int)
+            dim = np.array([self.nspin, self.nkpt, self.nband], dtype=np.int)
         else:
             dim = np.empty(3, dtype=np.int)
-            self.nspin, self.nkpt, self.nband = dim
 
         comm.Bcast([dim, MPI.INT])
 

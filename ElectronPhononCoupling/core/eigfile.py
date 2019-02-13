@@ -72,14 +72,14 @@ class EigFile(EpcFile):
         """
         Limit the number of eigenvalues to nband_max bands.
         """
-        self.EIG = self.EIG[:,:,:nband_max]
+        self.EIG = self.EIG[:,:,:nband_max].copy()
 
     def trim_nkpt(self, idx_kpt):
         """
         Limit the number of k-points.
         """
-        self.EIG = self.EIG[:,idx_kpt,:]
-        self.Kptns = self.Kptns[idx_kpt,:]
+        self.EIG = self.EIG[:,idx_kpt,:].copy()
+        self.Kptns = self.Kptns[idx_kpt,:].copy()
 
     def iter_spin_band_eig(self, ikpt):
         """

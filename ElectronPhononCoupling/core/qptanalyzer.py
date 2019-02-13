@@ -2,16 +2,21 @@ from __future__ import print_function
 
 import numpy as np
 from numpy import zeros, ones, einsum
+import warnings
+import inspect
 
 from .constants import tol6, tol8, tol12, Ha2eV, kb_HaK
 
 from .mathutil import delta_lorentzian
 from . import EigFile, Eigr2dFile, FanFile, DdbFile, GkkFile
 
+from .mpi import MPI, comm, size, rank, master_only, mpi_watch, i_am_master
+
+import resource
+
 __author__ = "Gabriel Antonius"
 
 __all__ = ['QptAnalyzer']
-
 
 class QptAnalyzer(object):
 
@@ -151,7 +156,7 @@ class QptAnalyzer(object):
 
     def get_nband_max(self, files):
         """
-        Compare nband across nput files and return lowest number of nband.
+        Compare nband across input files and return lowest number of nband.
         """
         nbands = []
         for f in files:
@@ -161,9 +166,10 @@ class QptAnalyzer(object):
             raise Exception("Don't know nband_max. Files have not been read.")
 
         nband_max = min(nbands)
-        if not nbands[1:] == nbands[:-1]:
-            msg = "nband is different across files. Using nband={}"
-            warnings.warn(msg.format(nband_max))
+        # FIXME prints a warning for every q-point which is VERY verbose
+        #if not nbands[1:] == nbands[:-1]:
+        #    msg = "nband is different across files. Using nband={}"
+        #    warnings.warn(msg.format(nband_max))
         return nband_max
     
     def trim_nband(self, files):
@@ -182,6 +188,15 @@ class QptAnalyzer(object):
         for f in files:
             if f.fname:
                 f.trim_nkpt(idx_kpt)
+    
+    def trim_files(self, files):
+        #pass
+        #return
+        tf = [f for f in files if hasattr(f, "nband") and f.fname]
+        if tf:
+            self.trim_nband(tf)
+            if self.idx_kpt_se:
+                self.trim_nkpt(tf, self.idx_kpt_se)
 
     def read_nonzero_files(self):
         """Read all nc files that are not specifically related to q=0."""
@@ -190,9 +205,7 @@ class QptAnalyzer(object):
         for f in files:
             if f.fname:
                 f.read_nc()
-        self.trim_nband(files)
-        if self.idx_kpt_se:
-            self.trim_nkpt(files, self.idx_kpt_se)
+        self.trim_files(files)
 
         if self.amu is not None:
             self.ddb.set_amu(self.amu)
@@ -212,9 +225,7 @@ class QptAnalyzer(object):
         for f in files:
             if f.fname:
                 f.read_nc()
-        self.trim_nband(files)
-        if self.idx_kpt_se:
-            self.trim_nkpt(files, self.idx_kpt_se)
+        self.trim_files(files)
 
     def broadcast_zero_files(self):
         """Broadcast the data related to q=0 from master to all workers."""
@@ -591,7 +602,6 @@ class QptAnalyzer(object):
                                 temperature=temperature, omega=omega,
                                 shape=shape)
 
-
         # Fan term
         # --------
 
@@ -613,50 +623,59 @@ class QptAnalyzer(object):
 
         # nkpt, nband, nomegase
         eta = self.get_eta(omega_se)
+        
+        if i_am_master:
+            warnings.warn(str(inspect.getargspec(einsum)))
 
-        for jband in range(self.nband):
+        with open("log{}".format(rank), "w") as flog:
+            for jband in range(self.nband):
+                # nkpt, nband
+                delta_E = (
+                    self.eig0.EIG[0,:,:].real
+                  - einsum('k,n->kn', self.eigq.EIG[0,:,jband].real, ones(nband))
+                  )
+        
+                # nkpt, nband, nomegase
+                delta_E_omega = (
+                      einsum('kn,l->knl', delta_E, ones(nomegase))
+                    + einsum('kn,l->knl', ones((nkpt,nband)), omega_se)
+                    - eta
+                    )
+        
+                # Emission term
+                # nkpt, nband, nomegase, nmode
+                deno1 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
+                       - einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
 
-            # nkpt, nband
-            delta_E = (
-                self.eig0.EIG[0,:,:].real
-              - einsum('k,n->kn', self.eigq.EIG[0,:,jband].real, ones(nband))
-              )
-    
-            # nkpt, nband, nomegase
-            delta_E_omega = (
-                  einsum('kn,l->knl', delta_E, ones(nomegase))
-                + einsum('kn,l->knl', ones((nkpt,nband)), omega_se)
-                - eta
-                )
-    
-            # Emission term
-            # nkpt, nband, nomegase, nmode
-            deno1 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
-                   - einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
+                # nmode, nkpt, nband, nomegase, ntemp
+                div1 = einsum('kot,knlo->oknlt', num1[:,jband,:,:], 1.0 / deno1)
+        
+                del deno1
+        
+                # Absorption term
+                # nkpt, nband, nomegase, nmode
+                deno2 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
+                       + einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
+        
+                # nmode, nkpt, nband, nomegase, ntemp
+                div2 = einsum('kot,knlo->oknlt', num2[:,jband,:,:], 1.0 / deno2)
 
-            # nmode, nkpt, nband, nomegase, ntemp
-            div1 = einsum('kot,knlo->oknlt', num1[:,jband,:,:], 1.0 / deno1)
-    
-            del deno1
-    
-            # Absorption term
-            # nkpt, nband, nomegase, nmode
-            deno2 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
-                   + einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
-    
-            # nmode, nkpt, nband, nomegase, ntemp
-            div2 = einsum('kot,knlo->oknlt', num2[:,jband,:,:], 1.0 / deno2)
+                del deno2
+        
+                flog.write(str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)+"  ")
+                flog.flush()
+                # FIXME This is not optimal: The mode indices will be summed
+                #       so there is no need to create an array this big.
+                # in case omega=True and mode=False
+                #warnings.warn("jband "+str(jband)+" rank "+str(rank))
 
-            del deno2
-    
-            # FIXME This is not optimal: The mode indices will be summed
-            #       so there is no need to create an array this big.
-            # in case omega=True and mode=False
+                # nmode, ntemp, nomegase, nkpt, nband
+                fan += einsum('kno,oknlt->otlkn', fan_g2[:,:,jband,:], div1 + div2)
+        
+                flog.write(str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)+"\n")
+                flog.flush()
 
-            # nmode, ntemp, nomegase, nkpt, nband
-            fan += einsum('kno,oknlt->otlkn', fan_g2[:,:,jband,:], div1 + div2)
-    
-            del div1, div2
+                del div1, div2
       
         # Reduce the arrays
         fan = self.reduce_array(fan, mode=mode, temperature=temperature,

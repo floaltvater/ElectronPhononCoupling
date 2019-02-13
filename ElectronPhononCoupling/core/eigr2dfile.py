@@ -28,7 +28,7 @@ class Eigr2dFile(EpcFile):
 
             self.natom = len(root.dimensions['number_of_atoms'])
             self.nsppol = len(root.dimensions['number_of_spins'])
-            nkpt = len(root.dimensions['number_of_kpoint'])
+            nkpt = len(root.dimensions['number_of_kpoints'])
             nband = len(root.dimensions['max_number_of_states'])
             # number_of_spins, number_of_kpoints, max_number_of_states
             self.occ = root.variables['occupations'][:,:,:]
@@ -68,18 +68,18 @@ class Eigr2dFile(EpcFile):
         """
         Limit the number of eigenvalues to nband_max bands.
         """
-        self.EIG2D = self.EIG2D[:,:nband_max]
-        self.occ = self.occ[:,:,:nband_max]
-        self.eigenvalues = self.eigenvalues[:,:,:nband_max]
+        self.EIG2D = self.EIG2D[:,:nband_max].copy()
+        self.occ = self.occ[:,:,:nband_max].copy()
+        self.eigenvalues = self.eigenvalues[:,:,:nband_max].copy()
 
     def trim_nkpt(self, idx_kpt):
         """
         Limit the number of k-points.
         """
-        self.EIG2D = self.EIG2D[idx_kpt]
-        self.occ = self.occ[:,idx_kpt]
-        self.eigenvalues = self.eigenvalues[:,idx_kpt]
-        self.kpt = self.kpt[idx_kpt]
+        self.EIG2D = self.EIG2D[idx_kpt].copy()
+        self.occ = self.occ[:,idx_kpt].copy()
+        self.eigenvalues = self.eigenvalues[:,idx_kpt].copy()
+        self.kpt = self.kpt[idx_kpt].copy()
 
     @mpi_watch
     def broadcast(self):
@@ -96,17 +96,17 @@ class Eigr2dFile(EpcFile):
 
         if rank != 0:
 
-            self.natom, self.nkpt, self.nband, self.nsppol = dim[:]
+            self.natom, nkpt, nband, self.nsppol = dim[:]
 
-            self.occ = np.empty((self.nsppol, self.nkpt, self.nband), dtype=np.float)
+            self.occ = np.empty((self.nsppol, nkpt, nband), dtype=np.float)
 
-            self.EIG2D = np.empty((self.nkpt, self.nband, 3, self.natom,
+            self.EIG2D = np.empty((nkpt, nband, 3, self.natom,
                                    3, self.natom), dtype=np.complex)
 
-            self.eigenvalues = np.empty((self.nsppol, self.nkpt, self.nband), dtype=np.float)
+            self.eigenvalues = np.empty((self.nsppol, nkpt, nband), dtype=np.float)
 
             # number_of_kpoints, 3
-            self.kpt = np.empty((self.nkpt, 3), dtype=np.float)
+            self.kpt = np.empty((nkpt, 3), dtype=np.float)
             self.qred = np.empty(3, dtype=np.float)
             self.wtq = np.empty(1, dtype=np.float)
             self.rprimd = np.empty((3, 3), dtype=np.float)

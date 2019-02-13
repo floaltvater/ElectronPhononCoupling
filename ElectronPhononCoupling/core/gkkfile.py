@@ -31,8 +31,8 @@ class GkkFile(EpcFile):
         with nc.Dataset(fname, 'r') as root:
 
             self.natom = len(root.dimensions['number_of_atoms'])
-            self.nkpt = len(root.dimensions['number_of_kpoints'])
-            self.nband = len(root.dimensions['max_number_of_states'])
+            nkpt = len(root.dimensions['number_of_kpoints'])
+            nband = len(root.dimensions['max_number_of_states'])
             self.nsppol = len(root.dimensions['number_of_spins'])
 
             # number_of_spins, number_of_kpoints, max_number_of_states
@@ -50,26 +50,34 @@ class GkkFile(EpcFile):
             # nband, natom, ncart, nkpt, product_mband_nsppol*2 
             GKKtmp = root.variables['second_derivative_eigenenergies_actif'][:,:,:,:,:]
             GKKtmp2 = np.einsum('ijkno->nokji', GKKtmp)
-            self.GKK = np.zeros((self.nkpt, self.nsppol*self.nband, 3, self.natom, self.nband), dtype=np.complex)
+            self.GKK = np.zeros((nkpt, self.nsppol*nband, 3, self.natom, nband), dtype=np.complex)
             self.GKK.real[...] = GKKtmp2[:, ::2, ...]
             self.GKK.imag[...] = GKKtmp2[:, 1::2, ...]
 
             # Now the second band index "n" refers to the state at "k+q,n"
-            self.GKK = np.reshape(self.GKK,(self.nkpt,self.nsppol,self.nband,3,self.natom,self.nband))
+            self.GKK = np.reshape(self.GKK,(nkpt,self.nsppol,nband,3,self.natom,nband))
 
             self.GKK_mode = None
+    
+    @property
+    def nkpt(self):
+        return self.GKK.shape[0] if self.GKK is not None else None
+
+    @property
+    def nband(self):
+        return self.GKK.shape[2] if self.GKK is not None else None
 
     def trim_nband(self, nband_max):
         """
         Limit the number of eigenvalues to nband_max bands.
         """
-        self.GKK = self.GKK[:,:,:nband_max,:,:,:nband_max]
+        self.GKK = self.GKK[:,:,:nband_max,:,:,:nband_max].copy()
 
     def trim_nkpt(self, idx_kpt):
         """
         Limit the number of k-points.
         """
-        self.GKK = self.GKK[:,idx_kpt,:]
+        self.GKK = self.GKK[:,idx_kpt,:].copy()
 
     def write_nc(self, fname, overwrite=False):
         """
@@ -269,17 +277,17 @@ class GkkFile(EpcFile):
 
         if rank != 0:
 
-            self.natom, self.nkpt, self.nband, self.nsppol = dim[:]
+            self.natom, nkpt, nband, self.nsppol = dim[:]
 
-            self.occ = np.empty((self.nsppol, self.nkpt, self.nband), dtype=np.float)
+            self.occ = np.empty((self.nsppol, nkpt, nband), dtype=np.float)
 
-            self.GKK = np.empty((self.nkpt,self.nsppol,self.nband,3,self.natom,self.nband),
+            self.GKK = np.empty((nkpt,self.nsppol,nband,3,self.natom,nband),
                                 dtype=np.complex)
 
-            self.eigenvalues = np.empty((self.nsppol, self.nkpt, self.nband), dtype=np.float)
+            self.eigenvalues = np.empty((self.nsppol, nkpt, nband), dtype=np.float)
 
             # number_of_kpoints, 3
-            self.kpt = np.empty((self.nkpt, 3), dtype=np.float)
+            self.kpt = np.empty((nkpt, 3), dtype=np.float)
             self.qred = np.empty(3, dtype=np.float)
             self.wtq = np.empty(1, dtype=np.float)
             self.rprimd = np.empty((3, 3), dtype=np.float)

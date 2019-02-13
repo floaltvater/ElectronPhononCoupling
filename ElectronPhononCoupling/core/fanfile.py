@@ -68,18 +68,18 @@ class FanFile(EpcFile):
         """
         Limit the number of eigenvalues to nband_max bands.
         """
-        self.FAN = self.FAN[:,:nband_max]
-        self.occ = self.occ[:,:,:nband_max]
-        self.eigenvalues = self.eigenvalues[:,:,:nband_max]
+        self.FAN = self.FAN[:,:nband_max].copy()
+        self.occ = self.occ[:,:,:nband_max].copy()
+        self.eigenvalues = self.eigenvalues[:,:,:nband_max].copy()
 
     def trim_nkpt(self, idx_kpt):
         """
         Limit the number of k-points.
         """
-        self.FAN = self.FAN[idx_kpt]
-        self.occ = self.occ[:,idx_kpt]
-        self.eigenvalues = self.eigenvalues[:,idx_kpt]
-        self.kpt = self.kpt[idx_kpt]
+        self.FAN = self.FAN[idx_kpt].copy()
+        self.occ = self.occ[:,idx_kpt].copy()
+        self.eigenvalues = self.eigenvalues[:,idx_kpt].copy()
+        self.kpt = self.kpt[idx_kpt].copy()
 
     @mpi_watch
     def broadcast(self):
@@ -96,17 +96,17 @@ class FanFile(EpcFile):
 
         if rank != 0:
 
-            self.natom, self.nkpt, self.nband, self.nsppol = dim[:]
+            self.natom, nkpt, nband, self.nsppol = dim[:]
 
-            self.occ = np.empty((self.nsppol, self.nkpt, self.nband), dtype=np.float)
+            self.occ = np.empty((self.nsppol, nkpt, nband), dtype=np.float)
 
-            self.FAN = np.empty((self.nkpt, self.nband, 3, self.natom,
-                                 3, self.natom, self.nband), dtype=np.complex)
+            self.FAN = np.empty((nkpt, nband, 3, self.natom,
+                                 3, self.natom, nband), dtype=np.complex)
 
-            self.eigenvalues = np.empty((self.nsppol, self.nkpt, self.nband), dtype=np.float)
+            self.eigenvalues = np.empty((self.nsppol, nkpt, nband), dtype=np.float)
 
             # number_of_kpoints, 3
-            self.kpt = np.empty((self.nkpt, 3), dtype=np.float)
+            self.kpt = np.empty((nkpt, 3), dtype=np.float)
             self.qred = np.empty(3, dtype=np.float)
             self.wtq = np.empty(1, dtype=np.float)
             self.rprimd = np.empty((3, 3), dtype=np.float)
