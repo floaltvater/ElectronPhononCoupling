@@ -31,7 +31,33 @@ class GsrFile(EigFile):
             self.EIG = root.variables['eigenvalues'][:,:,:] 
             self.Kptns = root.variables['reduced_coordinates_of_kpoints'][:,:]
             self.occ = root.variables['occupations'][:,:,:]
-            self.nspin, self.nkpt, self.nband = self.EIG.shape
+
+    @property
+    def nspin(self):
+        return self.EIG.shape[0] if self.EIG is not None else None
+
+    @property
+    def nkpt(self):
+        return self.EIG.shape[1] if self.EIG is not None else None
+
+    @property
+    def nband(self):
+        return self.EIG.shape[2] if self.EIG is not None else None
+
+    def trim_nband(self, nband_max):
+        """
+        Limit the number of eigenvalues to nband_max bands.
+        """
+        self.EIG = self.EIG[:,:,:nband_max]
+        self.occ = self.occ[:,:,:nband_max]
+
+    def trim_nkpt(self, idx_kpt):
+        """
+        Limit the number of k-points.
+        """
+        self.EIG = self.EIG[:,idx_kpt,:]
+        self.Kptns = self.Kptns[idx_kpt,:]
+        self.occ = self.occ[:,idx_kpt,:]
 
     @mpi_watch
     def broadcast(self):

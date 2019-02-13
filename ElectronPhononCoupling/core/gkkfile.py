@@ -59,6 +59,18 @@ class GkkFile(EpcFile):
 
             self.GKK_mode = None
 
+    def trim_nband(self, nband_max):
+        """
+        Limit the number of eigenvalues to nband_max bands.
+        """
+        self.GKK = self.GKK[:,:,:nband_max,:,:,:nband_max]
+
+    def trim_nkpt(self, idx_kpt):
+        """
+        Limit the number of k-points.
+        """
+        self.GKK = self.GKK[:,idx_kpt,:]
+
     def write_nc(self, fname, overwrite=False):
         """
         Write a new GKK.nc file.
@@ -66,6 +78,7 @@ class GkkFile(EpcFile):
         except for the gkk matrix elements, which are the ones stored in memory.
         This function is used when altering the gkk matrix elements.
         """
+        #FIXME This doesn't work after trim_* functions have been called
 
         if not overwrite and os.path.exists(fname):
             raise Exception('File exists: {}\nUse overwrite=True to overwrite'.format(fname))

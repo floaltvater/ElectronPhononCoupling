@@ -68,6 +68,19 @@ class EigFile(EpcFile):
     def nband(self):
         return self.EIG.shape[2] if self.EIG is not None else None
 
+    def trim_nband(self, nband_max):
+        """
+        Limit the number of eigenvalues to nband_max bands.
+        """
+        self.EIG = self.EIG[:,:,:nband_max]
+
+    def trim_nkpt(self, idx_kpt):
+        """
+        Limit the number of k-points.
+        """
+        self.EIG = self.EIG[:,idx_kpt,:]
+        self.Kptns = self.Kptns[idx_kpt,:]
+
     def iter_spin_band_eig(self, ikpt):
         """
         Iterator over spin index, band index, and eigenvalues at one k-point.

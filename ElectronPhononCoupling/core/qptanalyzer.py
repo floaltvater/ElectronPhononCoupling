@@ -41,6 +41,7 @@ class QptAnalyzer(object):
                  smearing_below = 0.00367,
                  nband_se = None,  # Number of bands for self-energy
                  iband_se = 0,  # Starting bands index for self-energy
+                 idx_kpt_se = None, # Indexing array for k-points
                  ):
 
         # Files
@@ -69,6 +70,7 @@ class QptAnalyzer(object):
 
         self.nband_se = nband_se
         self.iband_se = iband_se
+        self.idx_kpt_se = idx_kpt_se
 
     @property
     def nkpt(self):
@@ -147,12 +149,50 @@ class QptAnalyzer(object):
     def has_active(self):
         return (bool(self.fan.fname) and bool(self.fan0.fname)) or self.use_gkk
 
+    def get_nband_max(self, files):
+        """
+        Compare nband across nput files and return lowest number of nband.
+        """
+        nbands = []
+        for f in files:
+            if f.fname:
+                nbands.append(f.nband)
+        if not nbands:
+            raise Exception("Don't know nband_max. Files have not been read.")
+
+        nband_max = min(nbands)
+        if not nbands[1:] == nbands[:-1]:
+            msg = "nband is different across files. Using nband={}"
+            warnings.warn(msg.format(nband_max))
+        return nband_max
+    
+    def trim_nband(self, files):
+        """
+        Ensure consistent number of bands across files.
+        """
+        nband_max = self.get_nband_max(files)
+        for f in files:
+            if f.fname:
+                f.trim_nband(nband_max)
+
+    def trim_nkpt(self, files, idx_kpt):
+        """
+        Limit the k-point indeces.
+        """
+        for f in files:
+            if f.fname:
+                f.trim_nkpt(idx_kpt)
+
     def read_nonzero_files(self):
         """Read all nc files that are not specifically related to q=0."""
-        for f in (self.ddb, self.eigq, self.eigr2d, self.eigi2d,
-                  self.fan, self.gkk):
+        files = (self.ddb, self.eigq, self.eigr2d, self.eigi2d, 
+                 self.fan, self.gkk)
+        for f in files:
             if f.fname:
                 f.read_nc()
+        self.trim_nband(files)
+        if self.idx_kpt_se:
+            self.trim_nkpt(files, self.idx_kpt_se)
 
         if self.amu is not None:
             self.ddb.set_amu(self.amu)
@@ -168,9 +208,13 @@ class QptAnalyzer(object):
 
     def read_zero_files(self):
         """Read all nc files that are related to q=0."""
-        for f in (self.eig0, self.eigr2d0, self.fan0, self.gkk0):
+        files = (self.eig0, self.eigr2d0, self.fan0, self.gkk0)
+        for f in files:
             if f.fname:
                 f.read_nc()
+        self.trim_nband(files)
+        if self.idx_kpt_se:
+            self.trim_nkpt(files, self.idx_kpt_se)
 
     def broadcast_zero_files(self):
         """Broadcast the data related to q=0 from master to all workers."""

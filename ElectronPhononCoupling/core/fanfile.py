@@ -27,15 +27,15 @@ class FanFile(EpcFile):
         with nc.Dataset(fname, 'r') as root:
 
             self.natom = len(root.dimensions['number_of_atoms'])
-            self.nkpt = len(root.dimensions['number_of_kpoints'])
-            self.nband = len(root.dimensions['max_number_of_states'])
             self.nsppol = len(root.dimensions['number_of_spins'])
+            nkpt = len(root.dimensions['number_of_kpoints'])
+            nband = len(root.dimensions['max_number_of_states'])
 
             # number_of_spins, number_of_kpoints, max_number_of_states
             self.occ = root.variables['occupations'][:,:,:]
 
-            self.FAN = zeros((self.nkpt, self.nband, 3, self.natom,
-                              3, self.natom, self.nband), dtype=np.complex)
+            self.FAN = zeros((nkpt, nband, 3, self.natom,
+                              3, self.natom, nband), dtype=np.complex)
 
             # product_mband_nsppol, number_of_atoms,  number_of_cartesian_directions,
             # number_of_atoms, number_of_cartesian_directions,
@@ -55,6 +55,31 @@ class FanFile(EpcFile):
             self.qred = root.variables['current_q_point'][:]
             self.wtq = root.variables['current_q_point_weight'][:]
             self.rprimd = root.variables['primitive_vectors'][:,:]
+    
+    @property
+    def nkpt(self):
+        return self.FAN.shape[0] if self.FAN is not None else None
+
+    @property
+    def nband(self):
+        return self.FAN.shape[1] if self.FAN is not None else None
+
+    def trim_nband(self, nband_max):
+        """
+        Limit the number of eigenvalues to nband_max bands.
+        """
+        self.FAN = self.FAN[:,:nband_max]
+        self.occ = self.occ[:,:,:nband_max]
+        self.eigenvalues = self.eigenvalues[:,:,:nband_max]
+
+    def trim_nkpt(self, idx_kpt):
+        """
+        Limit the number of k-points.
+        """
+        self.FAN = self.FAN[idx_kpt]
+        self.occ = self.occ[:,idx_kpt]
+        self.eigenvalues = self.eigenvalues[:,idx_kpt]
+        self.kpt = self.kpt[idx_kpt]
 
     @mpi_watch
     def broadcast(self):
