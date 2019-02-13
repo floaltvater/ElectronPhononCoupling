@@ -72,12 +72,17 @@ class GkkFile(EpcFile):
         Limit the number of eigenvalues to nband_max bands.
         """
         self.GKK = self.GKK[:,:,:nband_max,:,:,:nband_max].copy()
+        self.occ = self.occ[:,:,:nband_max].copy()
+        self.eigenvalues = self.eigenvalues[:,:,:nband_max].copy()
 
     def trim_nkpt(self, idx_kpt):
         """
         Limit the number of k-points.
         """
-        self.GKK = self.GKK[:,idx_kpt,:].copy()
+        self.GKK = self.GKK[idx_kpt,:].copy()
+        self.occ = self.occ[:,idx_kpt].copy()
+        self.eigenvalues = self.eigenvalues[:,idx_kpt].copy()
+        self.kpt = self.kpt[idx_kpt].copy()
 
     def write_nc(self, fname, overwrite=False):
         """

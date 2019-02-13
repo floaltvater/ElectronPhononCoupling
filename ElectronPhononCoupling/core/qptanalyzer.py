@@ -3,14 +3,11 @@ from __future__ import print_function
 import numpy as np
 from numpy import zeros, ones, einsum
 import warnings
-import inspect
 
 from .constants import tol6, tol8, tol12, Ha2eV, kb_HaK
 
 from .mathutil import delta_lorentzian
 from . import EigFile, Eigr2dFile, FanFile, DdbFile, GkkFile
-
-from .mpi import MPI, comm, size, rank, master_only, mpi_watch, i_am_master
 
 import resource
 
@@ -109,6 +106,30 @@ class QptAnalyzer(object):
             return self.gkk.nband
         else:
             raise Exception("Don't know nband. No files to read.")
+    
+    @property
+    def eigenvalues(self):
+        if self.eigr2d.fname:
+            return self.eigr2d.eigenvalues
+        elif self.fan.fname:
+            return self.fan.eigenvalues
+        elif self.gkk.fname:
+            return self.gkk.eigenvalues
+        elif self.eigq.fname:
+            return self.eigq.EIG
+        else:
+            raise Exception("Don't know eigenvalues. No files to read.")
+    
+    @property
+    def occ_full(self):
+        if self.eigr2d.fname:
+            return self.eigr2d.occ
+        elif self.fan.fname:
+            return self.fan.occ
+        elif self.gkk.fname:
+            return self.gkk.occ
+        else:
+            raise Exception("Don't know occ. No files to read.")
 
     @property
     def nband_se(self):
@@ -624,58 +645,48 @@ class QptAnalyzer(object):
         # nkpt, nband, nomegase
         eta = self.get_eta(omega_se)
         
-        if i_am_master:
-            warnings.warn(str(inspect.getargspec(einsum)))
+        for jband in range(self.nband):
+            # nkpt, nband
+            delta_E = (
+                self.eig0.EIG[0,:,:].real
+              - einsum('k,n->kn', self.eigq.EIG[0,:,jband].real, ones(nband))
+              )
+    
+            # nkpt, nband, nomegase
+            delta_E_omega = (
+                  einsum('kn,l->knl', delta_E, ones(nomegase))
+                + einsum('kn,l->knl', ones((nkpt,nband)), omega_se)
+                - eta
+                )
+    
+            # Emission term
+            # nkpt, nband, nomegase, nmode
+            deno1 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
+                   - einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
 
-        with open("log{}".format(rank), "w") as flog:
-            for jband in range(self.nband):
-                # nkpt, nband
-                delta_E = (
-                    self.eig0.EIG[0,:,:].real
-                  - einsum('k,n->kn', self.eigq.EIG[0,:,jband].real, ones(nband))
-                  )
-        
-                # nkpt, nband, nomegase
-                delta_E_omega = (
-                      einsum('kn,l->knl', delta_E, ones(nomegase))
-                    + einsum('kn,l->knl', ones((nkpt,nband)), omega_se)
-                    - eta
-                    )
-        
-                # Emission term
-                # nkpt, nband, nomegase, nmode
-                deno1 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
-                       - einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
+            # nmode, nkpt, nband, nomegase, ntemp
+            div1 = einsum('kot,knlo->oknlt', num1[:,jband,:,:], 1.0 / deno1)
+    
+            del deno1
+    
+            # Absorption term
+            # nkpt, nband, nomegase, nmode
+            deno2 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
+                   + einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
+    
+            # nmode, nkpt, nband, nomegase, ntemp
+            div2 = einsum('kot,knlo->oknlt', num2[:,jband,:,:], 1.0 / deno2)
 
-                # nmode, nkpt, nband, nomegase, ntemp
-                div1 = einsum('kot,knlo->oknlt', num1[:,jband,:,:], 1.0 / deno1)
-        
-                del deno1
-        
-                # Absorption term
-                # nkpt, nband, nomegase, nmode
-                deno2 = (einsum('knl,o->knlo', delta_E_omega, ones(nmode))
-                       + einsum('knl,o->knlo', ones((nkpt,nband,nomegase)), omega_q))
-        
-                # nmode, nkpt, nband, nomegase, ntemp
-                div2 = einsum('kot,knlo->oknlt', num2[:,jband,:,:], 1.0 / deno2)
+            del deno2
+    
+            # FIXME This is not optimal: The mode indices will be summed
+            #       so there is no need to create an array this big.
+            # in case omega=True and mode=False
 
-                del deno2
-        
-                flog.write(str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)+"  ")
-                flog.flush()
-                # FIXME This is not optimal: The mode indices will be summed
-                #       so there is no need to create an array this big.
-                # in case omega=True and mode=False
-                #warnings.warn("jband "+str(jband)+" rank "+str(rank))
-
-                # nmode, ntemp, nomegase, nkpt, nband
-                fan += einsum('kno,oknlt->otlkn', fan_g2[:,:,jband,:], div1 + div2)
-        
-                flog.write(str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)+"\n")
-                flog.flush()
-
-                del div1, div2
+            # nmode, ntemp, nomegase, nkpt, nband
+            fan += einsum('kno,oknlt->otlkn', fan_g2[:,:,jband,:], div1 + div2)
+    
+            del div1, div2
       
         # Reduce the arrays
         fan = self.reduce_array(fan, mode=mode, temperature=temperature,

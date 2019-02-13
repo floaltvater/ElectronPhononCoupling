@@ -86,6 +86,7 @@ class EpcAnalyzer(object):
 
                  nband_se = None,
                  iband_se = 0,
+                 idx_kpt_se = None,
 
                  # File names
                  rootname='epc.out',
@@ -179,6 +180,7 @@ class EpcAnalyzer(object):
             smearing_below = smearing_below,
             nband_se = nband_se,
             iband_se = iband_se,
+            idx_kpt_se = idx_kpt_se,
             )
 
         # Read the first DDB and check that it is Gamma
@@ -249,6 +251,14 @@ class EpcAnalyzer(object):
     @property
     def iband_se(self):
         return self.qptanalyzer.iband_se
+
+    @property
+    def eigenvalues(self):
+        return self.qptanalyzer.eigenvalues
+
+    @property
+    def occ_full(self):
+        return self.qptanalyzer.occ_full
 
     @property
     def natom(self):
@@ -1115,17 +1125,17 @@ class EpcAnalyzer(object):
             # Write data on the eigenvalues
             data = ds.createVariable('reduced_coordinates_of_kpoints', 'd',
                                      ('number_of_kpoints','cartesian'))
-            data[:,:] = dim.variables['reduced_coordinates_of_kpoints'][:,:]
+            data[:,:] = self.kpts
 
             data = ds.createVariable(
                 'eigenvalues','d',
                 ('number_of_spins','number_of_kpoints','max_number_of_states'))
-            data[:,:,:] = dim.variables['eigenvalues'][:,:,:]
+            data[:,:,:] = self.eigenvalues
 
             data = ds.createVariable(
                 'occupations','i',
                 ('number_of_spins','number_of_kpoints','max_number_of_states'))
-            data[:,:,:] = dim.variables['occupations'][:,:,:]
+            data[:,:,:] = self.occ_full
 
             data = ds.createVariable(
                 'primitive_vectors', 'd',
